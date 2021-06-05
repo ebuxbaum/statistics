@@ -1,0 +1,452 @@
+\section{Singular value decomposition (SVD)}
+
+\subsection{Introduction}
+
+A matrix \(\arr{A}_{n\times p} (n > p) \) of rank \skalar{k} can be decomposed according to
+\begin{equation}
+  \arr{A}_{n\times p} = \arr{U}_{n\times k} \Sigma_{k\times k} V^T_{p\times k}
+\end{equation}
+where both \arr{U} and \arr{V} are orthogonal, that is
+\begin{equation}
+  \arr{U}^T \arr{U} = \arr{V} \arr{V}^T = \arr{I}
+\end{equation}
+Since \arr{U} is not square, it is orthogonal only in one direction as \(\arr{UU}^T \) is undefined. \(\Sigma \) is a diagonal matrix of singular values (positive square roots of eigenvalues), usually sorted such that \(\sigma_{i+1} \leq \sigma_i \). The columns of \arr{U} contain the \skalar{k} \textbf{left singular vectors} (normalised eigenvectors of \(\arr{AA}^T \)) and the \skalar{k} columns of \arr{V} the \textbf{right singular vectors} (normalised eigenvalues of \(\arr{A}^T\arr{A} \)) of \arr{A}.
+
+Because of orthogonality, if \(n > p \) the eigenvalue equations
+\begin{equation}
+  \arr{AA}^T\arr{U} = \arr{U}\Sigma^2 \wedge \arr{A}^T\arr{AV} = \arr{V} \Sigma^2
+\end{equation}
+can be used to find \arr{V} and \(\Sigma^2 \) from \(\arr{A}^T\arr{A} \), and then \(\arr{U} = \arr{AV}\Sigma^{-1} \). In the case of \(p > n \) calculate the decomposition \(\arr{A}^T = \arr{V} \Sigma \arr{U}^T \), then swap \arr{U} and \arr{V}. There will be at most \skalar{p} non-zero singular values in this case.
+
+Singular values and eigenvalues of a matrix are related by \(\sigma_i = \sqrt{\lambda_i} \).
+
+SVD can be used for
+\begin{description}
+  \item[Noise suppression]{Those singular values that are much smaller than the largest can be replaced by zero and then for all \(\skalar{q} \leq \skalar{p} \) non-zero singular values noise-reduced values for the data \(\hat{\AbsVec{a}}_{ij} = \sum_{k=1}^q{\AbsVec{u}_{ik} \sigma_{kk} \AbsVec{v}_{jk}} \) can be calculated. This can also be used for compression, for example of images.}
+  \item[Solving linear equations]{\( \arr{A}\AbsVec{x} = \AbsVec{b} \) can be rewritten \(\AbsVec{x} = \arr{V}\Sigma^{-1}\arr{U}^T \AbsVec{b} = \frac{\AbsVec{v}_{ij}}{s_{jj}} \sum_{k}{\AbsVec{u}_{ki} \AbsVec{b}_k} \). This method is more stable than QR decomposition or \Name{Gauss}ian elimination, if very small \(\sigma \) are first set to zero.  }
+  \item[Inversion of non-square matrices]{(pseudo inverse) \(\arr{A}^T\arr{A}\AbsVec{x} = \arr{A}^T\AbsVec{b} \)}
+\end{description}
+
+SVD is the generalisation of eigenanalysis for non-square matrices:
+\begin{itemize}
+  \item{Columns of \arr{V} are eigenvectors of \(\arr{A}^T\arr{A} \).}
+  \item{Columns of \arr{U} are eigenvectors of \(\arr{A}\arr{A}^T \).}
+  \item{Diagonals of \(\Sigma \) are square roots of the eigenvalues of both \(\arr{A}^T\arr{A} \) and \(\arr{A}\arr{A}^T \).}
+\end{itemize}
+
+
+\subsection{Implementation}
+
+The following routine \parencite{Pre-89} calculates the SVD of \arr{A}, where \arr{U} overwrites \arr{A}, which therefore has to be copied before calling this routine. \AbsVec{w} is the vector of diagonal elements of \(\Sigma \). \arr{V} (\emph{not} \(\arr{V}^T \)) is also returned.
+
+\begin{lstlisting}[caption={Interface of unit SingularValue}]
+  UNIT SingularValue;
+
+  INTERFACE
+
+  USES MathFunc, Vector, Matrix;
+
+  PROCEDURE svdcmp(VAR a: MatrixTyp; VAR w: VectorTyp; VAR v: MatrixTyp);
+
+  PROCEDURE svdSynth(VAR A: MatrixTyp; CONST W: VectorTyp; CONST U, V: MatrixTyp);
+  { Berechnet A aus U, W, und V (nicht V^T). }
+
+
+  IMPLEMENTATION
+
+  VAR CH: CHAR;
+\end{lstlisting}
+
+
+\begin{lstlisting}[caption=Singular value decomposition]
+  PROCEDURE svdcmp(VAR a: MatrixTyp; VAR w: VectorTyp; VAR v: MatrixTyp);
+  { Berechnet die Singular Value Decomposition A = U * W * V^T zur
+    m*n Matrix A. Dabei überschreibt U die Matrix A, welche bei Bedarf
+    vor Aufruf der Prozedur kopiet werden muß. Die n*n Diagonalmatrix W
+    wird zurückgegeben als Vector der Diagonal-Elemente. Wichtig: In
+    V steht die n*n Matrix V, nicht V^T. V und W werden in der Routine initialisiert.
+    Literatur: Press et al., Numerical Methods in Pascal, Cambridge 1989  }
+
+  LABEL 1, 2, 3;
+
+  CONST MaxIter = 50;
+
+  VAR m, n, nm, mnmin, l, k, j, jj, its, i       : INTEGER;
+    z, y, x, scale, s, h, g, f, c, anorm, Number : double;
+    rv1                                          : VectorTyp;
+
+
+    FUNCTION sign(a, b: double): double;
+
+    BEGIN
+      IF (b >= 0.0)
+        THEN Result := Abs(a)
+        ELSE Result := -Abs(a);
+    END;
+
+  BEGIN
+    { Householder reduction to bidiagonal form }
+    m := MatrixRows(A);
+    n := MatrixColumns(A);
+    CreateMatrix(V, n, n, 0.0);
+    CreateVector(W, n, 0.0);
+    CreateVector(rv1, n, 0.0);
+    g := 0.0;
+    scale := 0.0;
+    anorm := 0.0;
+    FOR i := 1 TO n DO
+      BEGIN
+        l := i + 1;
+        SetVectorElement(rv1, i, scale * g);
+        g := 0.0;
+        s := 0.0;
+        scale := 0.0;
+        IF (i <= m)
+          THEN
+            BEGIN
+              FOR k := i TO m DO
+                scale := scale + Abs(GetMatrixElement(A, k, i));
+              IF (scale <> 0.0)
+                THEN
+                  BEGIN
+                    FOR k := i TO m DO
+                      BEGIN
+                        Number := GetMatrixElement(A, k, i) / scale;
+                        SetMatrixElement(A, k, i, Number);
+                        s := s + Sqr(Number);
+                      END;
+                    f := GetMatrixElement(A, i, i);
+                    g := -sign(Sqrt(s), f);
+                    h := f * g - s;
+                    SetMatrixElement(A, i, i, f - g);
+                    IF (i <> n)
+                      THEN
+                        FOR j := l TO n DO
+                          BEGIN
+                            s := 0.0;
+                            FOR k := i TO m DO
+                            s := s + GetMatrixElement(A, k, i) * GetMatrixElement(A, k, j);
+                            f := s / h;
+                            FOR k := i TO m DO
+                              SetMatrixElement(A, k, j, GetMatrixElement(A, k, j) +
+                                 f * GetMatrixElement(A, k, i));
+                          END;
+                    FOR k := i TO m DO
+                      SetMatrixElement(A, k, i, scale * GetMatrixElement(A, k, i));
+                  END;
+            END;
+        SetVectorElement(W, i, scale * g);
+        g := 0.0;
+        s := 0.0;
+        scale := 0.0;
+        IF ((i <= m) AND (i <> n))
+          THEN
+            BEGIN
+              FOR k := l TO n DO
+                scale := scale + Abs(GetMatrixElement(A, i, k));
+              IF (scale <> 0.0)
+                THEN
+                  BEGIN
+                    FOR k := l TO n DO
+                      BEGIN
+                        Number := GetMatrixElement(A, i, k) / scale;
+                        SetMatrixElement(A, i, k, Number);
+                        s := s + Sqr(Number);
+                      END;
+                    f := GetMatrixElement(A, i, l);
+                    g := -sign(Sqrt(s), f);
+                    h := f * g - s;
+                    SetMatrixElement(A, i, l, f - g);
+                    FOR k := l TO n DO
+                      SetVectorElement(rv1, k, GetMatrixElement(A, i, k) / h);
+                    IF (i <> m)
+                      THEN
+                        FOR j := l TO m DO
+                          BEGIN
+                            s := 0.0;
+                            FOR k := l TO n DO
+                              s := s + GetMatrixElement(A, j, k) * GetMatrixElement(A, i, k);
+                            FOR k := l TO n DO
+                              SetMatrixElement(A, j, k, GetMatrixElement(A, j, k) +
+                                s * GetVectorElement(rv1, k));
+                         END;
+                    FOR k := l TO n DO
+                      SetMatrixElement(A, i, k, scale * GetMatrixElement(A, i, k));
+                  END;
+            END;
+        anorm := max(anorm, (Abs(GetVectorElement(W, i)) + Abs(GetVectorElement(rv1, i))));
+      END;
+    { Accumulation of right-hand transform }
+    FOR i := n DOWNTO 1 DO
+      BEGIN
+        IF (i < n)
+          THEN
+            BEGIN
+              IF (g <> 0.0)
+                THEN
+                  BEGIN
+                    FOR j := l TO n DO
+                      SetMatrixElement(V, j, i, GetMatrixElement(A, i, j) /
+                        GetMatrixElement(A, i, l) / g);
+                    FOR j := l TO n DO
+                      BEGIN
+                        s := 0.0;
+                        FOR k := l TO n DO
+                          s := s + GetMatrixElement(A, i, k) * GetMatrixElement(V, k, j);
+                        FOR k := l TO n DO
+                          SetMatrixElement(V, k, j, GetMatrixElement(V, k, j) +
+                             s * GetMatrixElement(V, k, i));
+                      END;
+                  END;
+              FOR j := l TO n DO
+                BEGIN
+                  SetMatrixElement(V, i, j, 0.0);
+                  SetMatrixElement(V, j, i, 0.0);
+                END;
+            END;
+        SetMatrixElement(V, i, i, 1.0);
+        g := GetVectorElement(rv1, i);
+        l := i;
+      END;
+    { Accumulation of left-hand transformation }
+    IF m < n
+      THEN mnmin := m
+      ELSE mnmin := n;
+    FOR i := mnmin DOWNTO 1 DO
+      BEGIN
+        l := i + 1;
+        g := GetVectorElement(W, i);
+        IF (i < n)
+          THEN FOR j := l TO n DO SetMatrixElement(A, i, j, 0.0);
+        IF (g <> 0.0)
+          THEN
+            BEGIN
+              g := 1.0 / g;
+              IF (i <> n)
+                THEN
+                  FOR j := l TO n DO
+                    BEGIN
+                      s := 0.0;
+                      FOR k := l TO m DO
+                        s := s + GetMatrixElement(A, k, i) * GetMatrixElement(A, k, j);
+                      f := (s / GetMatrixElement(A, i, i)) * g;
+                      FOR k := i TO m DO
+                        SetMatrixElement(A, k, j, GetMatrixElement(A, k, j) + f *
+                           GetMatrixElement(A, k, i));
+                    END;
+              FOR j := i TO m DO
+                SetMatrixElement(A, j, i, GetMatrixElement(A, j, i) * g);
+            END
+          ELSE
+            FOR j := i TO m DO SetMatrixElement(A, j, i, 0.0);
+      SetMatrixElement(A, i, i, GetMatrixElement(A, i, i) + 1.0);
+      END;
+    { Diagonalisation of bidiagonal form }
+    FOR k := n DOWNTO 1 DO                { loop over singular values }
+      BEGIN
+        FOR its := 1 TO MaxIter DO        { loop over allowed iterations }
+          BEGIN
+            FOR l := k DOWNTO 1 DO       { test for splitting }
+              BEGIN
+                nm := l - 1;
+                IF ((Abs(GetVectorElement(rv1, l)) + anorm) = anorm)
+                  THEN GOTO 2;
+                IF ((Abs(GetVectorElement(W, nm)) + anorm) = anorm)
+                  THEN GOTO 1;
+              END;
+  1:        c := 0.0;               { Cancellation of rv1[l] if l > 1  }
+            s := 1.0;
+            FOR i := l TO k DO
+              BEGIN
+                f := s * GetVectorElement(rv1, i);
+                IF ((Abs(f) + anorm) <> anorm)
+                  THEN
+                    BEGIN
+                      g := GetVectorElement(W, i);
+                      h := Pythag(f, g);
+                      SetVectorElement(W, i, h);
+                      h := 1.0 / h;
+                      c := (g * h);
+                      s := -(f * h);
+                      FOR j := 1 TO m DO
+                        BEGIN
+                          y := GetMatrixElement(A, j, nm);
+                          z := GetMatrixElement(A, j, i);
+                          SetMatrixElement(A, j, nm, (y * c) + (z * s));
+                          SetmatrixElement(A, j, i, -(y * s) + (z * c));
+                        END;
+                    END;
+              END;
+  2:        z := GetVectorElement(W, k);
+            IF (l = k)
+              THEN
+                BEGIN               { Convergence }
+                  IF (z < 0.0)    { Singular Value is made non-negative }
+                    THEN
+                      BEGIN
+                        SetVectorElement(W, k, -z);
+                        FOR j := 1 TO n DO
+                          SetMatrixElement(V, j, k, -GetMatrixElement(V, j, k));
+                      END;
+                  GOTO 3;
+                END;
+            IF (its = MaxIter)
+              THEN
+                BEGIN
+                  Writeln('no convergence in ', Maxiter: 2, ' SVDCMP iterations');
+                  ReadLn;
+                END;
+            x := GetVectorElement(W, l);     { Shift from bottom 2 by 2 minor }
+            nm := k - 1;
+            y := GetVectorElement(W, nm);
+            g := GetVectorElement(rv1, nm);
+            h := GetVectorElement(rv1, k);
+            f := ((y - z) * (y + z) + (g - h) * (g + h)) / (2.0 * h * y);
+            g := Pythag(f, 1.0);
+            f := ((x - z) * (x + z) + h * ((y / (f + sign(g, f))) - h)) / x;
+            { Next QR-transformation }
+            c := 1.0;
+            s := 1.0;
+            FOR j := l TO nm DO
+              BEGIN
+                i := j + 1;
+                g := GetVectorElement(rv1, i);
+                y := GetVectorElement(W, i);
+                h := s * g;
+                g := c * g;
+                z := Pythag(f, h);
+                SetVectorElement(rv1, j, z);
+                c := f / z;
+                s := h / z;
+                f := (x * c) + (g * s);
+                g := -(x * s) + (g * c);
+                h := y * s;
+                y := y * c;
+                FOR jj := 1 TO n DO
+                  BEGIN
+                    x := GetMatrixElement(V, jj, j);
+                    z := GetMatrixElement(V, jj, i);
+                    SetMatrixElement(V, jj, j, (x * c) + (z * s));
+                    SetMatrixElement(V, jj, i, -(x * s) + (z * c));
+                  END;
+                z := Pythag(f, h);
+                SetVectorElement(W, j, z);   { Rotation can be arbitrary if z=0 }
+                IF (z <> 0.0)
+                  THEN
+                    BEGIN
+                      z := 1.0 / z;
+                      c := f * z;
+                      s := h * z;
+                    END;
+                f := (c * g) + (s * y);
+                x := -(s * g) + (c * y);
+                FOR jj := 1 TO m DO
+                  BEGIN
+                    y := GetMatrixElement(A, jj, j);
+                    z := GetMatrixElement(A, jj, i);
+                    SetMatrixElement(A, jj, j, (y * c) + (z * s));
+                    SetMatrixElement(A, jj, i, -(y * s) + (z * c));
+                  END;
+              END;
+            SetVectorElement(rv1, l, 0.0);
+            SetVectorElement(rv1, k, f);
+            SetVectorElement(W, k, x);
+          END;
+  3:     ;
+      END;
+    DestroyVector(rv1);
+  END;
+\end{lstlisting}
+
+The following routine calculates \arr{A} from \arr{U}, \arr{V} and the diagonal elements of \(\Sigma \) in \AbsVec{w}
+
+\begin{lstlisting}[caption={Singular value synthesis}]
+  PROCEDURE svdSynth(VAR A : MatrixTyp; CONST W : VectorTyp; CONST U, V : MatrixTyp);
+
+  VAR j, k, l, n, p: INTEGER;
+
+  BEGIN
+    n := MatrixRows(U);
+    p := MatrixColumns(U);
+    IF VectorLength(W) <> p
+      THEN
+        BEGIN
+          CH := Matrix.WriteErrorMessage('Singular value synthesis: Dimension error');
+          EXIT;
+        END;
+    IF ((MatrixRows(V) <> p) OR (MatrixColumns(V) <> p))
+      THEN
+        BEGIN
+          CH := Matrix.WriteErrorMessage('Singular value synthesis: Dimension error');
+          EXIT;
+        END;
+    CreateMatrix(A, n, p, 0.0);
+    FOR k := 1 TO n DO
+      FOR l := 1 TO p DO
+        BEGIN
+          FOR j := 1 TO p DO
+            SetMatrixElement(A, k, l, GetMatrixElement(A, k, l) +
+                GetMatrixElement(U, k, j) * GetVectorElement(W, j) * GetMatrixElement(V, l, j));
+       END;
+  END;
+
+
+  END. // SingularValue
+\end{lstlisting}
+
+\subsection{The \Name{Moore-Penrose} pseudoinverse}\label{text:pseudoinv}
+
+The pseudoinverse \(\arr{X}^+ \) of a real or complex matrix \(\arr{X}_{n\times p} \) satisfies the \Name{Moore-Penrose}-conditions:
+\begin{itemize}
+  \item{\( \arr{XX}^+ \) needs not to be the general identity matrix, but it maps all column vectors of \arr{X} to themselves: \(\arr{X} \arr{X}^+ \arr{X} = \arr{X} \).}
+  \item{\( \arr{X}^+ \arr{X} \arr{X}^+ = \arr{X}^+ \)}
+  \item{the transpose \((\arr{XX}^+)^T \) (the \Name{Hermite}ian (conjugate) transpose \((\arr{XX}^+)^H \) for complex matrices) is equal to \(\arr{XX}^+ \).}
+  \item{similarly, \((\arr{X}^+\arr{X})^T = \arr{X}^+\arr{X} \)}
+\end{itemize}
+Pseudoinverses have the following properties:
+\begin{itemize}
+  \item{\( \arr{X}^+ \ \exists \ \forall \arr{X} \) and is unique.}
+  \item{if \arr{X} is invertible, then \(\arr{X}^{-1} = \arr{X}^+ \). }
+  \item{if \(\arr{X} = \mathbf{0} \), then \(\arr{X}^+ = \arr{X}^T \). }
+  \item{\( (\arr{X}^+)^+ = \arr{X} \)}
+  \item{Pseudoinversion commutes with transposition, conjugation, and taking the conjugate transpose.}
+  \item{\( (a\arr{X})^+ = a^{-1} \arr{X}^+ \quad \forall \quad a \neq 0 \). }
+\end{itemize}
+
+For a scalar \skalar{x} the pseudoinverse is
+\begin{equation}
+   x^+ = \left\lbrace \begin{aligned}
+                  0&, \mathrm{if}\ x=0\\
+                  x^{-1}&,\ \mathrm{otherwise}
+                \end{aligned}
+         \right.
+\end{equation}
+
+For a vector \AbsVec{x} the pseudoinverse is
+\begin{equation}
+   \AbsVec{x}^+ = \left\lbrace \begin{aligned}
+                                  \mathbf{0}^T&, \mathrm{if}\ \AbsVec{x}=\mathbf{0}\\
+                                  \frac{\AbsVec{x}^T}{\AbsVec{x}^T \AbsVec{x}}&,\ \mathrm{otherwise}
+                               \end{aligned}
+                  \right.
+\end{equation}
+
+For matrices, when all columns of \arr{X} are linearly independent, so that \((\arr{X}^T\arr{X}) \) is invertible, then the left inverse of \arr{X} is calculated as \(\arr{X}^+ = (\arr{X}^T \arr{X})^{-1} \arr{X}^T \). If, on the other hand, all rows of \arr{X} are linearly independent (\( (\arr{XX}^T) \) is invertible), then the right inverse of \arr{X} is calculated by \(\arr{X}^+ = \arr{X}^T (\arr{X}\arr{X}^T)^{-1} \).
+
+As a special case, if \arr{X} has orthonormal columns \((\arr{X}^T\arr{X}) = \arr{I} \) or orthonormal rows \((\arr{X}\arr{X}^T) = \arr{I} \) then \(\arr{X}^+ = \arr{X}^T \).
+
+If \arr{X} is an orthogonal projection matrix (\( \arr{X} = \arr{X}^T \wedge \arr{X}^2 = \arr{X} \)) then \(\arr{X}^+ = \arr{X} \).
+
+The pseudoinverse of \((\arr{XX}^T) \) and \((\arr{X}^T\arr{X}) \), often needed in statistics, can be calculated by QR-decomposition:
+\begin{equation}
+    \arr{X}^T \arr{X} = (\arr{QR})^T (\arr{QR}) = \arr{R}^T \arr{Q}^T \arr{QR} = \arr{R}^T \arr{R}
+\end{equation}
+
+The pseudoinverse of \arr{X} can be calculated numerically from the singular value decomposition \(\svd{(\arr{X}_{n\times p})} = \arr{U}_{n\times n} \hat{\Sigma} \arr{V}^T_{p\times p} \) with \( \hat{\Sigma} = \diag(\sigma_1 \ldots \sigma_p) \) and \(\sigma_1 \geq \ldots \sigma_r > \sigma_{r+1} = \sigma_{r+2} \ldots = \sigma_p = 0 \). Then  \( \arr{X}^+_{p\times n} = \arr{V} \hat{\Sigma}^+ \arr{U}^T \).
+
+The pseudoinverse of a rectangular diagonal matrix like \(\Sigma \) is calculated by taking the reciprocal of each non-zero diagonal element. Non-zero means larger than a given value, often \(\epsilon \max(n,p) \max(\Sigma) \), all values smaller than this are set to zero. Then the matrix is transposed.
+
+In R, the \texttt{MASS} package provides the \Name{Moore-Penrose} pseudoinverse through the \texttt{ginv} function, calculated via the svd. Alternatively, the \texttt{pracma} package provides the \texttt{pinv} function.
+
+\printbibliography[heading=subbibliography]
+\end{refsection}

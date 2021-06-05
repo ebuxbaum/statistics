@@ -1,0 +1,1143 @@
+% -*- TeX:UK -*-
+\chapter{Cluster-analysis}
+\begin{refsection}
+
+
+Cluster analysis is described in \parencite{Sne-73}, a very thorough yet readable introduction. We use the following definitions:
+\begin{lstlisting}[caption=Program head]
+  PROGRAM Similarity;
+
+  USES math,            // Lazarus math unit
+       MathFunc,        // general arithmetic
+       Vector,          // vector arithmetic
+       Matrix,          // matrix arithmetic
+       BigSet,          // sets of arbitrary cardinality
+       Correlations;    // correlation coefficients
+
+  CONST MaxVariables =  180;
+        MaxCases     = 1400;
+        SepChar      =  ';';    // separates data IN csv-fles
+
+  TYPE DataTypes  = (binary, nominal, ordinal, interval, rational);
+       TypeVector = ARRAY[1..MaxVariables] OF DataTypes;
+
+  VAR Types      : TypeVector;
+      Data, Dist1, Dist2 : MatrixTyp;
+      Variables,
+      Cases,i,j  : WORD;
+      r          : double;
+
+  TYPE ClusterFeld = ARRAY [1..MaxCases] OF SetType;     // declarations should be local TO ClusterAnalysis
+
+  VAR HilfsMatrix  : MatrixTyp;    { akt. Distanzen der Cluster oben, coph. Matrix unten und Clusterzustand diagonal }
+      Cluster      : ClusterFeld;
+      v            : VectorTyp;
+\end{lstlisting}
+
+\section{Read the data matrix}
+
+The data are stored in a comma separated value (csv) file according to  \href{https://tools.ietf.org/html/rfc4180}{RFC 4180}, which can be exported from Excel. However, in Middle Europe the decimal separator is comma rather than point (as in the US), so that the semicolon is used as variable separator. The routine needs to handle this:
+\begin{lstlisting}[caption=Read data from comma-separated file]
+  PROCEDURE ReadCSV(VAR Cases, Variables : WORD; VAR Types: TypeVector;
+                    VAR Data: MatrixTyp);
+
+  CONST MaxCases = 200;
+
+  VAR
+    InputFile: TEXT;
+    c: CHAR;
+    s: STRING;
+    Error, i, j: WORD;
+    Interim: MatrixTyp;
+    x: double;
+
+  BEGIN
+    Variables := 0;
+    Cases := 0;
+    Assign(InputFile, 'All.csv');
+    Reset(InputFile);
+    ReadLn(InputFile);            // ignore Line WITH variable names
+    WHILE NOT EoLn(InputFile) DO  // Read data types from second Line, count Variables
+    BEGIN
+      INC(Variables);
+      s := '';
+      REPEAT
+        Read(InputFile, c);
+        IF c <> SepChar THEN
+          S := s + c;
+      UNTIL ((c = SepChar) OR EoLn(InputFile));
+      CASE s OF
+        'binary'   : Types[Variables] := binary;
+        'ordinal'  : Types[Variables] := ordinal;
+        'nominal'  : Types[Variables] := nominal;
+        'interval' : Types[Variables] := interval;
+        'rational' : Types[Variables] := rational
+        ELSE
+          BEGIN              // Format error: abort PROGRAM WITH error message
+            Write('unknown data type ', s, ' at n=', Variables: 3, '. Press <CR>:');
+            ReadLn;
+            HALT;
+         END; { else }
+      END; { case }
+    END; { while }
+    ReadLn(InputFile);            // go TO next Line
+    CreateMatrix(Interim, MaxCases, Variables, 0.0);  // Note: number OF persons NOT yet known
+    WHILE NOT EoF(InputFile) DO   // now Read data from following lines AND count cases
+      BEGIN
+        INC(Cases);
+        FOR i := 1 TO Variables DO
+          BEGIN
+            x := ReadFloat(InputFile);
+            IF MathError
+              THEN
+                BEGIN
+                  MathError := FALSE;
+                  HALT;
+                END;
+            SetMatrixElement(Interim, Cases, i, x);
+          END;
+        ReadLn(InputFile);
+      END; { while }
+    Close(InputFile);
+    CreateMatrix(Data, Cases, Variables, 0.0);  // now generate correctly sized data matrix
+    FOR i := 1 TO Cases DO
+      FOR j := 1 TO Variables DO
+        SetMatrixElement(Data, i, j, GetMatrixElement(Interim, i, j));
+    DestroyMatrix(Interim);                         // destroy the interim matrix
+    Writeln(Cases: 4, ' cases with ', Variables: 3, ' variables read, ');
+  END;
+\end{lstlisting}
+
+\section{Calculate the similarity/distance matrix}
+
+A distance between two data points \(\AbsVec{x}_{i\cdot}, \AbsVec{x}_{j\cdot} \) is metric, if it meets the following conditions:
+\begin{description}
+  \item[non-negativity]{\( D(\AbsVec{x}_{i\cdot}, \AbsVec{x}_{j\cdot}) \geq 0 \)}
+  \item[isolation]{\( D(\AbsVec{x}_{i\cdot}, \AbsVec{x}_{i\cdot}) = 0 \)}
+  \item[symmetry]{\( D(\AbsVec{x}_{i\cdot}, \AbsVec{x}_{j\cdot}) = D(\AbsVec{x}_{j\cdot}, \AbsVec{x}_{i\cdot}) \)}
+  \item[triangular inequality]{\( D(\AbsVec{x}_{i\cdot}, \AbsVec{x}_{j\cdot}) \geq D(\AbsVec{x}_{i\cdot}, \AbsVec{x}_{h\cdot}) + D(\AbsVec{x}_{h\cdot}, \AbsVec{x}_{j\cdot}) \) }
+\end{description}
+, and analogously for similarities.
+
+Because we have data of mixed type we use the universal similarity coefficient of \Name{Gower} \parencite{Gow-71}, see also \parencite[chapter 4.4]{Sne-73}, which for two \textbf{individuals} \skalar{i, j} is defined as
+\begin{equation}
+  S_G = \frac{\sum_{k=1}^{p}{w_{i,j,k} s_{i,j,k}}}{\sum_{k=1}^{p}{w_{i,j,k}}}
+\end{equation}
+over all variables \skalar{k}. The \textbf{weight} \skalar{w_{i,j,k}} is set to \num{1} if a comparison on character \skalar{k} can be made for the individuals \skalar{i, j}, and \num{0} if such a comparison cannot be made (\Foreign{i.e.}, if at least one of the two data is missing). In that case, both denominator and numerator will increase by \num{0}, the data pair will be ignored. Thus, \skalar{S_G} is robust with respect to missing data. \skalar{s_{i,j,k}} is calculated depending on data type:
+\begin{description}
+  \item[binary]{\( \skalar{s_{i,j,k}} = 1 \) if both data are \num{1}, or \num{0} otherwise. If the data table consists of only binary variables, this would correspond to using \Name{Jaccard}'s coefficient (see page \pageref{tab:binary}). It is possible to have \(\skalar{s_{i,j,k}} = 1 \) also for negative matches, but this is rarely warranted and has negative statistical implications \parencite{Hub-82}.}
+  \item[nominal]{\( \skalar{s_{i,j,k}} = 1 \) if the two data match, \num{0} otherwise. }
+  \item[ordinal]{In the original publication \(\skalar{s_{i,j,k}} = 1 \) for match, \num{0} for mismatch. However, \parencite{Pod-99} suggested to rank the data and then use the ranks like cardinal values. This yields more information for each comparison. Because we already use numbers to encode ordinal data in the data table, this is easily accomplished. }
+  \item[cardinal]{\( \skalar{s_{i,j,k}} = 1 - \frac{|X_{i,k} - X_{j,k}|}{R_k} \), with \skalar{R_k} the range of variable \skalar{k} (either range in the data set or, if known, range in the wild). This is the complement to the mean character difference of \parencite{Cai-58}.}
+\end{description}
+For clustering, we need distances rather than similarities, which is simply the complement to \num{1.0}.
+
+\begin{lstlisting}[caption=Distance matrix]
+  PROCEDURE Gowers(CONST Types : TypeVector; CONST Data : MatrixTyp;
+                    VAR Dist : MatrixTyp);
+
+  var SumW, i, j, k, Cases, Variables : word;
+      S, SumWS, x, y          : double;
+      Maximum, Minimum, Range : array [2..MaxVariables] of double; // as first column is case number
+
+  begin
+    Variables := MatrixColumns(Data);
+    Cases     := MatrixRows(Data);
+    for k := 2 to Variables do  // calculate range of intervall and rational data, ignore StudyNamber
+      begin
+        Maximum[k] := -MaxRealNumber;
+        Minimum[k] := MaxRealNumber;
+        case Types[k] of
+          ordinal, interval, rational : begin
+                for i := 1 to Cases do
+                    begin
+                      x := GetMatrixElement(Data, i, k);
+                      if not isNaN(x)
+                        then
+                          begin
+                            if (x > Maximum[k]) then Maximum[k] := x;
+                            if (x < Minimum[k]) then Minimum[k] := x;
+                          end;
+                    end; { for i }
+                  Range[k] := Maximum[k] - Minimum[k];
+                end
+          else Range[k] := 0.0;  // binary, nominal: just give it a defined value, won't be used
+        END;  { case }
+      END; { for k }
+    Writeln('ranges calculated');
+    Write('Distances: ');
+    CreateIdentityMatrix(Dist, Cases);
+    FOR i := 1 TO Cases DO
+      BEGIN
+        FOR j := Succ(i) TO Cases DO // calculate upper half OF similarity matrix
+          BEGIN
+             SumW := 0;
+             SumWS := 0;
+             FOR k := 2 TO Variables DO  // ignore CASE numbes
+               BEGIN
+                 x := GetMatrixElement(Data, i, k);
+                 y := GetMatrixElement(Data, j, k);
+  //               Write(OutFile, i:4, ';', j:4, ';', k:4, ';', FloatStr(x, 8), ';', FloatStr(y, 8), ';');
+                 IF (isNaN(x) OR isNaN(y))
+                   THEN // SumW AND SumWS both increase by 0
+                   ELSE
+                     CASE Types[k] OF
+                       binary, nominal : BEGIN
+                                           IF x = y
+                                             THEN S := 0
+                                             ELSE S := 1;
+                                           INC(SumW);
+                                           SumWS := SumWS + S; // AS W = 1 -> WS = S
+                                         END;
+                       ordinal, interval, rational :
+                                         BEGIN
+                                           S := Abs(x - y) / Range[k];
+                                           INC(SumW);
+                                           SumWS := SumWS + S;
+                                         END;
+                     END; { case }
+               END; { for k }
+             IF SumW = 0
+               THEN x := NaN                     // so that such cases can be identified IN the distance matrix
+               ELSE x := SumWS / SumW;
+             SetMatrixElement(Dist, i, j, x);
+             SetMatrixElement(Dist, j, i, SumW); // put number OF valid compares into lower half OF similarity matrix
+          END;  { for j }
+        IF (i MOD 20 = 0) THEN Write('.');
+      END; { for i }
+    Writeln(' calculated, ');
+  END;  { Gowers }
+
+  PROCEDURE WriteDistances (CONST Data, Dist : MatrixTyp);
+
+  VAR i, j, cases  : WORD;
+      OutFile : TEXT;
+      MaxS, MinS, MaxC, MinC, x : double;
+
+  BEGIN
+    Cases := MatrixRows(Dist);
+    Assign(OutFile, 'Distances.csv');
+    Rewrite(OutFile);
+    MaxS := MinRealNumber;
+    MaxC := MinRealNumber;
+    MinS := MaxRealNumber;
+    MinC := MaxRealNumber;
+    Write(OutFile, 'StudyNum;');  // LABEL columns
+    FOR i := 1 TO Cases DO Write(OutFile, Round(GetMatrixElement(Data, i, 1)):4, ';');
+    Writeln(OutFile);
+    FOR i := 1 TO Cases DO // the matrix itself
+      BEGIN
+        Write(OutFile, Round(GetMatrixElement(Data, i, 1)):4, ';');
+        FOR j := 1 TO Cases DO
+          IF (j>i)
+            THEN
+              BEGIN
+                x := GetMatrixElement(Dist, i, j);
+                Write(OutFile, x:6:4, ';');   // upper half WITH similarity
+                IF IsNaN(x)
+                  THEN
+                  ELSE
+                    BEGIN
+                      IF (x > MaxS) THEN MaxS := x;
+                      IF (x < MinS) THEN MinS := x;
+                    END;
+              END
+            ELSE
+               BEGIN
+                x := GetMatrixElement(Dist, i, j);
+                Write(OutFile, Round(x):4, ';');  // lower half WITH # OF comparisons
+                IF (j < i) // ignore i=j
+                  THEN
+                    BEGIN
+                      IF (x > MaxC) THEN MaxC := x;
+                      IF (x < MinC) THEN MinC := x;
+                    END;
+              END;
+         Writeln(OutFile)
+      END;  { for i }
+    Close(OutFile);
+    Writeln;
+    Writeln('Distances written to file, ');
+    Writeln('Range ', MinS:5:3, '-', MaxS:5:3, ' with ', MinC:3:0, '-', MaxC:3:0, ' comparisons');
+  END; { WriteDistances }
+
+  PROCEDURE AnalyseFrequencies(CONST Dist: MatrixTyp);
+
+  CONST Border = 50;    // number OF ranges FOR statistical analysis OF correlations
+
+  TYPE FreqsType  = ARRAY[-Border..Border] OF WORD;
+
+  VAR
+    i, j, Cases     : WORD;
+    k               : INTEGER;
+    OutFile         : TEXT;
+    x               : double;
+    Freqs           : FreqsType;
+
+  BEGIN
+    Assign(OutFile, 'DistFreq.csv');
+    Rewrite(OutFile);
+    Cases := MatrixRows(Dist);
+    FOR k := -Border TO Border DO
+      Freqs[k] := 0;
+    FOR i := 1 TO Cases DO
+      FOR j := Succ(i) TO Cases DO
+      BEGIN
+        x := GetMatrixElement(Dist, i, j) * Border;
+        INC(Freqs[Round(x)]);
+      END;
+    FOR k := -Border TO Border DO
+       Writeln(OutFile, k/Border:1:4, SepChar, Freqs[k]:6, SepChar);
+    Writeln(OutFile);
+    Close(OutFile);
+  END;
+\end{lstlisting}
+
+\section{Hierarchic-agglomerative clustering}
+
+A cluster is a set of \textbf{\acf{OTU}s} that were combined at a certain similarity. Initially, each \acs{OTU} forms a cluster by itself, then in each step the most similar clusters are combined and the process is continued until all \acs{OTU}s have been combined in a single cluster. The result is a binary tree. The similarity of two clusters is calculated as the unweighed average of the similarities of all members of one cluster with all members of the other (average linkage, \textbf{\acf{UPGMA}}). Alternatively, the distance between the most distant (complete linkage) or the closest \acs{OTU}s () of the clusters may be used, however, clustering tends to be better with average linkage.
+
+The routine returns the \textbf{cophenetic correlation coefficient}, which describes how well the tree preserves the pairwise distance of the \acs{OTU}s.
+
+\begin{lstlisting}[caption=clustering]
+  FUNCTION ClusterAnalysis (CONST Dist : MatrixTyp) : double;
+
+  VAR i, j,
+      AnzCluster   : WORD;
+      MinAbst      : double;
+      ClusterDatei : TEXT;
+
+       PROCEDURE Minimum (CONST HilfsMatrix : MatrixTyp; VAR MinAbst : double);
+
+       VAR i, j     : WORD;
+
+       BEGIN
+         FOR i := 1 TO Pred(Cases) DO
+           FOR j := Succ(i) TO Cases DO
+             IF GetMatrixElement(HilfsMatrix, i, j) < MinAbst
+               THEN MinAbst := GetMatrixElement(HilfsMatrix, i, j);
+     END;
+
+
+       PROCEDURE UniteCluster (VAR Cluster : ClusterFeld; i, j : WORD; MinAbst : double);
+
+       VAR k : WORD;
+
+       BEGIN
+         SetUnion(Cluster[i], Cluster[i], Cluster[j]);
+         ClearAllBits(Cluster[j]);
+         Writeln(ClusterDatei);
+         Writeln;
+         Write(ClusterDatei, MinAbst:6:4, ' ');
+         Write(MinAbst:6:4, ' ');
+         FOR k := 1 TO Cases DO
+           IF InSet(Cluster[i], k)
+             THEN
+               BEGIN
+                 Write(ClusterDatei, Round(GetMatrixElement(Data, k, 1)):4, ' ');
+                 Write(Round(GetMatrixElement(Data, k, 1)):4, ' ');
+               END;
+         Writeln(ClusterDatei);
+         Writeln;
+       END;
+
+
+       PROCEDURE Cophen (VAR HilfsMatrix : MatrixTyp; CONST Cluster : ClusterFeld;
+                         MinAbst : double);
+
+       VAR i, j, l : WORD;
+
+       BEGIN
+         FOR i := 1 TO Cases DO
+           IF NOT EmptySet(Cluster[i])
+             THEN
+               FOR j := 1 TO Pred(Cases) DO
+                  IF InSet(Cluster[i], j)
+                    THEN
+                      FOR l := Succ(i) TO Cases DO
+                         IF InSet(Cluster[i], l)
+                           THEN
+                             IF (GetMatrixElement(HilfsMatrix, l, j) = 0)
+                               THEN SetMatrixElement(HilfsMatrix, l, j, MinAbst);
+       END; { Cophen }
+
+
+       PROCEDURE NewDistances (CONST Cluster : ClusterFeld; CONST Dist : MatrixTyp;
+                                  VAR HilfsMatrix : MatrixTyp);
+
+       VAR i, j, k, l, b : WORD;
+           a             : double;
+
+       BEGIN
+         FOR i := 1 TO Pred(Cases) DO
+           FOR j := Succ(i) TO Cases DO
+             BEGIN
+               IF ((NOT EmptySet(Cluster[i])) AND (NOT EmptySet(Cluster[j])))
+                 THEN
+                   BEGIN
+                     a := 0.0;
+                     b := 0;
+                     FOR k := 1 TO Cases DO
+                       IF InSet(Cluster[i], k)
+                         THEN
+                           FOR l := 1 TO Cases DO
+                             IF InSet(Cluster[j], l)
+                               THEN
+                                 BEGIN
+                                   a := a + GetMatrixElement(Dist, k, l);
+                                   INC(b);
+                                 END;
+                     SetMatrixElement(HilfsMatrix, i, j, a/b);
+                   END
+                 ELSE
+                   SetMatrixElement(HilfsMatrix, i, j, MaxInt);
+             END; { for }
+       END; {NeueSimularitaeten}
+
+
+       FUNCTION NewDiagonal (CONST Cluster: ClusterFeld; VAR HilfsMatrix : MatrixTyp) : WORD;
+
+       VAR i, j : WORD;
+
+       BEGIN
+         j := 0;
+         FOR i := 1 TO Cases DO
+           IF NOT EmptySet(Cluster[i])
+             THEN
+               BEGIN
+                 SetMatrixElement(HilfsMatrix, i, i, 1);
+                 INC(j);
+               END
+             ELSE
+               SetMatrixElement(HilfsMatrix, i, i, 0);
+         NewDiagonal := j;
+       END;
+
+
+       FUNCTION Correlation (CONST Dist, HilfsMatrix : MatrixTyp) : double;
+
+       VAR DistMittel, CoMittel,
+           DistKor, CoKor,
+           SumDistKorSqr, SumCoKorSqr,
+           SumDistKorCoKor             : double;
+
+
+           PROCEDURE Mittelwerte (CONST Dist, HilfsMatrix : MatrixTyp);
+
+           VAR SumDist, SumCo : double;
+               i, j, z       : WORD;
+
+           BEGIN
+             SumDist := 0;
+             SumCo := 0;
+             z := 0;
+             FOR i := 1 TO Pred(Cases) DO
+               FOR j := Succ(i) TO Cases DO
+                 BEGIN
+                   SumDist := SumDist + GetMatrixElement(Dist, i, j);
+                   SumCo := SumCo + GetMatrixElement(HilfsMatrix, j, i);
+                   INC(z);
+                 END;
+             DistMittel := SumDist / z;
+             CoMittel := SumCo / z;
+           END;
+
+
+           FUNCTION Summen (CONST Dist, HilfsMatrix : MatrixTyp) : double;
+
+           VAR i, j : WORD;
+
+           BEGIN
+             SumDistKorSqr := 0;
+             SumCoKorSqr := 0;
+             SumDistKorCoKor := 0;
+             FOR i := 1 TO Pred(Cases) DO
+               FOR j := Succ(i) TO Cases DO
+                 BEGIN
+                   DistKor := GetMatrixElement(Dist, i, j) - DistMittel;
+                   CoKor := GetMatrixElement(HilfsMatrix, j, i) - CoMittel;
+                   SumDistKorSqr := SumDistKorSqr + Sqr(DistKor);
+                   SumCoKorSqr := SumCoKorSqr + Sqr(CoKor);
+                   SumDistKorCoKor := SumDistKorCoKor + DistKor * CoKor;
+                 END;
+             Writeln(SumDistKorCoKor:4:1, ' ', SumDistKorSqr:4:1, ' ',  SumCoKorSqr:4:1);
+             Summen := SumDistKorCoKor / (Sqrt(SumDistKorSqr) * Sqrt(SumCoKorSqr));
+           END;
+
+       BEGIN
+         Mittelwerte(Dist, HilfsMatrix);
+         Correlation := Summen(Dist, HilfsMatrix);
+       END;
+
+  BEGIN
+    ClusterAnalysis := 0.0;
+    Assign(ClusterDatei, 'Similarities.CLU');
+    Rewrite(ClusterDatei);
+    CopyMatrix(Dist, HilfsMatrix);
+    FOR i := 1 TO Cases DO         // jedem OTU sein eigenes Cluster
+      BEGIN
+        ClearAllBits(Cluster[i]);
+        SetBit(Cluster[i], i);
+      END;
+    REPEAT                                        { Beginn der Analysenschleife }
+      MinAbst := MaxRealNumber;
+      Minimum(HilfsMatrix, MinAbst);
+      FOR i := 1 TO Pred(Cases) DO               { neue Cluster bilden }
+        FOR j := Succ(i) TO Cases DO
+          IF (GetMatrixElement(HilfsMatrix, i, j) = MinAbst)
+            THEN UniteCluster(Cluster, i, j, MinAbst);
+      Cophen(HilfsMatrix, Cluster, MinAbst);
+      NewDistances(Cluster, Dist, HilfsMatrix);
+      AnzCluster := NewDiagonal(Cluster, HilfsMatrix);
+    UNTIL AnzCluster = 1;
+    Close(ClusterDatei);
+    Result := Correlation(Dist, Hilfsmatrix);
+  END;
+\end{lstlisting}
+
+\begin{lstlisting}[caption=compare distance matrices]
+  FUNCTION MatrixCorrelation (CONST Dist1, Dist2 : MatrixTyp) : float;
+
+  VAR i, j, k : WORD;
+    SumXY, SumX, SumY, SumX2, SumY2, varX, varY, covXY, x, y, r : float;
+    OutFile : TEXT;
+
+  BEGIN
+    Assign(OutFile, 'DistCorr.csv');
+    Rewrite(OutFile);
+    Cases := MatrixRows(Dist1);
+    SumXY := 0;
+    SumX := 0;
+    SumY := 0;
+    SumX2 := 0;
+    SumY2 := 0;
+    k := 0;
+    FOR i := 1 TO Cases DO
+      FOR j := Succ(i) TO Cases DO
+        BEGIN
+          x := GetMatrixElement(Dist1, i, j);
+          y := GetMatrixElement(Dist2, i, j);
+          Writeln(OutFile, i:3, ';', j:3, ';', FloatStr(x, 10), ';', FloatStr(y, 10), ';');
+          SumXY := SumXY + x * y;
+          SumX := SumX + x;
+          SumY := SumY + y;
+          SumX2 := SumX2 + x * x;
+          SumY2 := SumY2 + y * y;
+          INC(k); // actual number OF valid comparisons
+         END; { for }
+    varX := k * SumX2 - SumX * SumX;
+    varY := k * SumY2 - SumY * SumY;
+    covXY := k * SumXY - SumX * SumY;
+    IF Abs(varX * varY) < Zero
+      THEN Result := 0     // ???
+      ELSE Result := covXY / Sqrt(varX * varY);
+    Writeln(OutFile, FloatStr(Result, 10));
+    Close(OutFile);
+  END; { MatrixCorrelation }
+\end{lstlisting}
+
+
+The main part of the program is then quite short:
+
+\begin{lstlisting}[caption=Main program]
+  BEGIN
+    ReadCSV (Cases, Variables, Types, Data);
+    Gowers(Types, Data, Dist1);
+    CalcCaseCorrelations(Data, Dist2);
+    WriteDistances(Data, Dist2); // Data IS source OF study-number
+    AnalyseFrequencies(Dist2);
+    FOR i := 1 TO Cases DO
+       FOR j := Succ(i) TO Cases DO
+         BEGIN
+           SetMatrixElement(Dist1, j, i, GetMatrixElement(Dist1, i, j));       // symmetrieren
+           SetMatrixElement(Dist2, j, i, GetMatrixElement(Dist2, i, j));
+         END;
+    LeadingPrincipleMinors(Dist2, V);
+    FOR i := 1 TO Cases DO
+      Writeln(FloatStr(GetVectorElement(V, i), 10));
+    DestroyVector(V);
+    r := MatrixCorrelation (Dist1, Dist2);
+    r := ClusterAnalysis(Dist2);
+    Write('Cophenetic correlation', r:1:3, ' Press <CR> to finish:');
+    ReadLn;
+  END.
+\end{lstlisting}
+
+\section{\skalar{k}-means clustering}
+
+The data (which need to be cardinal) are grouped into \skalar{k} clusters \( \arr{C}_i \), where \(i \in [1..k], k \ll n \) is a number that must be chosen at the begin of the study. The algorithm is as follows \parencite{McQ-67, Har-79}:
+\begin{enumerate}
+   \item{Randomly select \skalar{k} \acs{OTU}s as centres of the clusters, and assign each \acs{OTU} to the closest centre (by squared \Name{Euklid}ian distance).}
+   \item{Repeat
+     \begin{enumerate}
+        \item{Calculate the centroids of all clusters, that is, the vector of the \skalar{p} feature means for the observations in the \skalar{i}th cluster. }
+        \item{Assign each \acs{OTU} to the cluster whose centroid is closest}
+     \end{enumerate}
+     until OTUs are no longer assigned to different centres. }
+\end{enumerate}
+This partitions the data space into \Name{Voronoi} cells. Should a cluster become empty, a new centre needs to be chosen. In effect, the between-cluster distances are maximised, the within-cluster distance minimised.
+
+Finding optimal partitioning (minimal sum of squared distances from the centres \( \sum_{i=1}^k \sum_{\AbsVec{x} \in \arr{C}_i}{\mathrm{dist}(\AbsVec{c}_i, \AbsVec{x})^2} \)) is NP-hard, the result of above heuristic depends somewhat on the starting assignments, the program needs to be run several times. Finally, the best solution is chosen. The algorithm is \( \mathbf{O}(npkm) \), where \skalar{m} is the number of iterations required. Local optima can be left by swapping \acs{OTU}s between clusters. Missing data can be handled by imputation of a probable range \parencite{Li-16}.
+
+
+\subsection{Modifications}
+
+\begin{description}
+  \item[\skalar{k}-means++ algorithm]{selects one \acs{OTU} randomly as starting point. Then the distances of all \acs{OTU}s to this starting point are calculated, and the next centre is determined so that the probability of an \acs{OTU} to become the centre depends on the square of the distance to the original starting point. This is repeated until all \skalar{k} centres have been selected. Then perform the \skalar{k}-means algorithm. This method converges twice as fast as the simple \skalar{k}-means algorithm, with similar end results.}
+  \item[\skalar{k}-median algorithm]{uses medians instead of means and Manhatten-distances \skalar{\ell_1} (absolute value of difference) instead of \Name{Euklid}ian \skalar{\ell_2} (squared distance, see section \ref{text:Norm} on page \pageref{text:Norm}).}
+  \item[\acf{PAM} algorithm]{tries to minimise the distance of the data points from the medoid instead of the centroid. While the centroid as mean of the data is synthetic, the medoid is a member of the data set that represents its group \parencite{Kau-90}. Since the calculation of means is sensitive to outliers, \acs{PAM} is more robust than \skalar{k}-means clustering. \skalar{k} data vectors are randomly assigned as medoids, other data points are assigned to their closest medoid. Then data and medoids are exchanged to minimise an objective (= distance) function.}
+  \item[\skalar{k}-modes clustering]{can handle categorical data. The distance of an \acs{OTU} to the centre of a cluster is given by the sum over all \skalar{p} variables of 1 for mismatches and \( 1 - \frac{n^r_j}{n_j} \) for matches, that is, matches for rare categories are weighted heavier than matches of frequent ones. Mixed categorical/cardinal data can be handled with universal distance functions like \Name{Gower}'s. }
+  \item[kernel \skalar{k}-means]{is used for data that are not linearly separable. Kernel methods try to classify cases by transforming the data into higher dimensions. }
+  \item[expectation–maximization algorithm]{is a generalisation of \skalar{k}-means clustering that works even if the clusters have very different sizes, densities or non-spherical shape. However, it is much more complex.}
+\end{description}
+
+
+\subsection{Selection of optimal \skalar{k}}
+
+\subsubsection{Elbow-method}
+
+For all \skalar{k}, calculate the within-cluster sum of square (wss) and plot against \skalar{k}. The optimal \skalar{k} is the position of the elbow in the plot (similar to scree-plot in \acs{PCA}, see section \ref{text:scree} on page \pageref{text:scree}).
+
+\subsubsection{Average silhouette method}
+
+A silhouette \( S(\AbsVec{x}) \) is a measure how close an observation \( \AbsVec{x}_{i\cdot} \) is to the nearest two clusters, and thus a measure of the quality of clustering. The average distance between an observation and a cluster \( \arr{C}_i \) is defined as the arithmetic average of the distances of \( \AbsVec{x}_{i\cdot} \) to all (other) members of \( \arr{C}_i \). Then
+\begin{equation}
+  S(\AbsVec{x}) = \left\{
+                    \begin{array}{c@{\;}c}
+                       0 & \mathrm{if\ \AbsVec{x}_{i\cdot} is\ the\ only\ element\ of\ \arr{C}_i} \\
+                       \frac{\dist(\AbsVec{x}_{i\cdot}, \arr{C}_i)-\dist(\AbsVec{x}_{i\cdot}, \arr{C}_j)}{\max(\dist(\AbsVec{x}_{i\cdot}, \arr{C}_i), \dist(\AbsVec{x}_{i\cdot}, \arr{C}_j))} & \mathrm{else}
+                    \end{array}
+                 \right.
+\end{equation}
+\skalar{s(\arr{C}_i)} is the arithmetic mean of all silhouettes of the  cluster \( \arr{C}_i \). If it is close to +1, the data point is in the appropriate cluster, if it is \num{-1}, it should be a member of the neighbouring cluster. A value near zero indicates that \( \AbsVec{x}_{i\cdot} \) is close to the border between clusters. The mean of all \skalar{s(\arr{C}_i)} of \( \arr{C}_i \) indicates how tightly grouped all the points in the cluster are. The mean \skalar{s(\arr{C}_i)} over all data is a measure of how well the data have been clustered. The silhouette coefficient is the largest \skalar{s(\arr{C}_i)} over all data in the entire data set. This can be used as criterium for optimising \skalar{k}.
+
+The cluster (of which \( \AbsVec{x}_{i\cdot} \) is not a member) with minimal \( S(\AbsVec{x}) \) is said to be the neighboring cluster.
+
+The silhouette plot plots a line of length \skalar{S(\AbsVec{x})} for all elements of the cluster, in descending order.
+
+
+\subsubsection{Gap statistics}
+
+Here we compare the within-cluster sum of square with that obtained on a synthetic data set with random data, which have the same range (\(\min{(\AbsVec{x}_{\cdot j})}, \max{(\AbsVec{x}_{\cdot j})}\)) as the original data set (bootstrapping). Then for \skalar{B} artificial data sets, calculate average and standard deviation of the logarithms of wss and plot \( \mathrm{Gap}(\skalar{k}) = \overline{\log(\mathrm{wss})_B} - \log(\mathrm{wss}_k) \) as function of \skalar{k}. Then \( s_k = \mathrm{sd}_k \times \sqrt{1 + 1/B} \) and we look for the smallest \skalar{k} where Gap(\skalar{k}) \(\geq\) Gap(\skalar{k}+1) - \skalar{s_{k+1}}.
+
+\subsection{Sourcecode for \skalar{k}-means clustering with \skalar{k}-fold crossvalidation}
+
+\subsubsection{\skalar{k}-means clustering}
+
+\begin{lstlisting}[caption=unit kNN: \skalar{k}-means clustering]
+  UNIT kNN;
+
+  INTERFACE
+
+  USES Math,
+       MathFunc,
+       Vector,
+       Matrix,
+       Deskript,
+       Zufall,
+       CrossValidation;
+
+  CONST
+    kNNError: BOOLEAN = FALSE;
+    KNNmax = 15;
+    pMax = 100;
+
+  TYPE
+    GroupTyp = ARRAY[1..MaxVector] OF WORD;
+
+  FUNCTION kMeansCluster(CONST Data: MatrixTyp;       // data matrix
+    k: WORD;                                          // number OF clusters
+    VAR Centroids: MatrixTyp;                         // centroids FOR all k clusters AND p variables
+    VAR Group: GroupTyp): float;                      // group no FOR each item
+  { splits a data matrix into k groups by the k-nearest neighbour method and
+    returns the sum of Euklidian distances of the data from their centroids. }
+
+  PROCEDURE AssignTestData(CONST TestData, Centroids: MatrixTyp;
+    kValidate : WORD;                                         // number OF cross-validation groups
+    VAR Count : WORD;                                         // no OF results calculated already
+    VAR ValidationResult: MatrixTyp);                         // Result
+  { assigns all rows of Data to the closest Centroid and
+    returns the study number, assigned group and squared distance to the centroid
+    in ValidationResult }
+
+  FUNCTION WithinSumOfSquares(CONST ValidationResult: MatrixTyp): float;
+  { calculates the sum of the squared distance of all data from their centroid,
+    which is stored in the third column of ValidationResult }
+
+  IMPLEMENTATION
+
+  PROCEDURE StartingCentoids(CONST Data: MatrixTyp; k: WORD; VAR Centroids: MatrixTyp);
+  // select the starting centroids using knn++ METHOD (distance-controlled Random)
+
+  VAR
+    v, vi, row, Distance : VectorTyp;
+    i, j, l, n, p        : WORD;
+    r                    : LONGINT;
+    Used                 : ARRAY[1..KNNmax] OF WORD;
+    u                    : BOOLEAN;
+    c                    : CHAR;
+    d, Sum               : float;
+
+  BEGIN
+    n := MatrixRows(Data);
+    p := MatrixColumns(Data);
+    CreateMatrix(Centroids, k, p, 0.0);
+    i := RandomLaplace(1, n);          // randomly select first centroid
+    Writeln('first centroid = ', i: 3);
+    GetRow(Data, i, v);
+    SetRow(Centroids, v, 1);
+    Used[1] := i;
+    FOR j := 2 TO k DO                        // select the remaining centroids
+      BEGIN
+        CreateVector(Distance, n, 0.0);
+        IF VectorError
+          THEN
+            BEGIN
+              c := WriteErrorMessage('program terminated');
+              HALT;
+            END;
+        Sum := 0;
+        FOR i := 1 TO n DO // calculate distance between all items AND last centroid
+          BEGIN
+            GetRow(Data, i, vi);
+            d := SquaredEuklidianDistance(v, vi, TRUE);
+            DestroyVector(vi);
+            SetVectorElement(Distance, i, d);
+            FOR l := 1 TO Pred(j) DO          // ignore IF datum i IS already a centroid
+              IF Used[l] = i THEN u := TRUE;
+            IF NOT (u) THEN Sum := Sum + d;
+          END;
+        l := ceil(Sum);
+        r := RandomLaplace(1, l); // distance-controlled Random selection OF NEW centroid
+        Sum := 0;
+        i := 0;
+        REPEAT
+          INC(i);
+          u := FALSE;
+          FOR l := 1 TO Pred(j) DO
+            IF Used[l] = i THEN u := TRUE;
+          IF NOT (u) THEN Sum := sum + Round(GetVectorElement(Distance, i));
+        UNTIL (Sum >= r);
+        GetRow(Data, i, vi);
+        SetRow(Centroids, vi, j);
+        FOR i := 1 TO p DO
+          SetVectorElement(v, i, GetVectorElement(vi, i));
+        DestroyVector(vi);
+        DestroyVector(Distance);
+      END; // FOR j
+    DestroyVector(v);
+  END;  // StartingCentroids
+
+  FUNCTION AssignItems(CONST Data, Centroids: MatrixTyp;
+    k: WORD;
+    VAR Group: GroupTyp): float;
+    // Assign each datum TO the cluster from the centre OF which it has minimal
+    // distance. Returns sum OF the minimal distances over all data
+
+  VAR
+    i, j, l, n, p : WORD;
+    d, min, Sum   : float;
+    vj, vi        : VectorTyp;
+
+  BEGIN
+    n := MatrixRows(Data);
+    p := MatrixColumns(Data);
+    Sum := 0;
+    FOR i := 1 TO n DO             // FOR all data rows
+      BEGIN
+        min := MaxRealNumber;
+        GetRow(Data, i, vi);
+        FOR j := 1 TO k DO         // find centroid WITH minimal distance TO the datum
+        BEGIN
+          GetRow(Centroids, j, vj);
+          d := SquaredEuklidianDistance(vj, vi, TRUE);
+          IF (d < min)
+            THEN
+              BEGIN
+                min := d;
+                l := j;
+              END; // THEN
+          DestroyVector(vj);
+        END; // FOR j
+        Group[i] := l;
+        Sum := Sum + min;
+        DestroyVector(vi);
+      END; // FOR i
+    Result := Sum;
+  END; // AssignItems
+
+
+  PROCEDURE CalculateNewCentroids(CONST Data: MatrixTyp;
+    k: WORD;
+    VAR Group: GroupTyp;
+    VAR Centroids: MatrixTyp
+    );
+
+  VAR
+    i, j, l, n, p, nk : WORD;
+    Sums              : ARRAY [1..pMax] OF float;
+    x                 : float;
+
+  BEGIN
+    n := MatrixRows(Data);
+    p := MatrixColumns(Data);
+    FOR l := 1 TO k DO
+      BEGIN
+        FOR j := 1 TO p DO
+          Sums[j] := 0.0;
+        nk := 0;
+        FOR i := 1 TO n DO
+          BEGIN
+            IF Group[i] = l
+              THEN
+                BEGIN
+                  FOR j := 1 TO p DO
+                    BEGIN
+                      x := GetMatrixElement(Data, i, j);
+                      Sums[j] := Sums[j] + x;
+                    END;
+                END;
+            INC(nk);
+          END;
+        FOR j := 1 TO p DO
+          IF (nk = 0)
+            THEN
+              SetMatrixElement(Centroids, k, j, 0) // no data IN group, shouldn't happen
+            ELSE
+              SetMatrixElement(Centroids, k, j, Sums[j] / nk);
+      END; // for l
+  END; // CalculateNewCentroids
+
+
+  FUNCTION kMeansCluster(CONST Data: MatrixTyp;
+    k: WORD;
+    VAR Centroids: MatrixTyp;
+    VAR Group: GroupTyp): float;
+
+  VAR
+    p, n, Iter         : WORD;
+    TotalDist, OldDist : float;
+
+  BEGIN  // kMeansCluster
+    n := MatrixRows(Data);
+    p := MatrixColumns(Data);
+    StartingCentoids(Data, k, Centroids);
+    TotalDist := MaxRealNumber;
+    Iter := 0;
+    REPEAT
+      OldDist := TotalDist;
+      Inc(Iter);
+      TotalDist := AssignItems(Data, Centroids, k, Group);
+      CalculateNewCentroids(Data, k, Group, Centroids);
+    UNTIL (abs(OldDist - TotalDist) < MaxError) OR (Iter > MaxIter);
+    Result := TotalDist;
+  END;   // kMeansCluster
+
+  PROCEDURE AssignTestData(CONST TestData, Centroids: MatrixTyp;
+    kValidate : WORD;
+    VAR Count : WORD;
+    VAR ValidationResult: MatrixTyp);
+
+  VAR
+    i, j, k, n, p, Opt : WORD;
+    vi, vj             : VectorTyp;
+    d, MinD            : float;
+
+  BEGIN
+    n := MatrixRows(TestData);
+    p := MatrixColumns(TestData);
+    k := MatrixRows(Centroids);
+    CreateVector(vi, p, 0.0);
+    FOR i := 1 TO n DO       // for all data in test data matrix
+      BEGIN
+        GetRow(TestData, i, vi);
+        MinD := MaxRealNumber;
+        Opt := 0;
+        FOR j := 1 TO k DO  // find centroid of minimal distance
+          BEGIN
+            GetRow(Centroids, j, vj);
+            d := SquaredEuklidianDistance(vi, vj, True);
+            IF d < MinD
+              THEN
+                BEGIN
+                  MinD := d;
+                  Opt := j;
+                END; // then
+            DestroyVector(vj);
+          END; // for j
+        SetMatrixElement(ValidationResult, Count, 1, GetMatrixElement(TestData, i, 1));
+        // study number
+        SetMatrixElement(ValidationResult, Count, 2, Opt);  // optimal centroid
+        SetMatrixElement(ValidationResult, Count, 3, MinD); // distance from centroid
+        DestroyVector(vi);
+        INC(Count);
+      END; // for i
+  END; // AssignTestData
+
+
+  FUNCTION WithinSumOfSquares(CONST ValidationResult: MatrixTyp): float;
+
+  VAR
+    i, n: WORD;
+    WSS: float;
+
+  BEGIN
+    n := MatrixRows(ValidationResult);
+    WSS := 0;
+    FOR i := 1 TO n DO
+      WSS := WSS + GetMatrixElement(ValidationResult, i, 3);
+    Result := WSS;
+  END;  // WithinSumOfSquares
+
+  end. //kNN
+\end{lstlisting}
+
+\subsubsection{\skalar{k}-fold crossvalidation}
+
+\begin{lstlisting}[caption=k-fold crossvalidation]
+  UNIT CrossValidation;
+
+  INTERFACE
+
+  USES MathFunc, Vector, Matrix, Zufall;
+
+  CONST
+    MaxK = 15;
+    CrossValidationError: BOOLEAN = FALSE;
+
+  TYPE
+    SplitDataTyp = ARRAY [1..MaxK] OF MatrixTyp;
+
+
+  PROCEDURE SplitDataMatrix(CONST Data: MatrixTyp;   // data matrix
+    kValidate: WORD;                                 // no OF validation groups
+    VAR SplitData: SplitDataTyp);                    // randomly distributed data
+  { randomly splits the data matrix into kValidate sub-matrices }
+
+  PROCEDURE CreateTestData(CONST SplitData: SplitDataTyp;
+    k, kValidate: WORD;
+    VAR TestData: MatrixTyp);
+  { combine all Groups except the out of box group k into test matrix }
+
+
+  IMPLEMENTATION
+
+  PROCEDURE SplitDataMatrix(CONST Data: MatrixTyp; kValidate: WORD;
+                            VAR SplitData: SplitDataTyp);
+
+  VAR
+    h, i, j, n, p : WORD;
+    c             : CHAR;
+    Available     : ARRAY [1..MaxK] OF WORD;
+    CurrentRow    : VectorTyp;
+
+  BEGIN
+    IF (kValidate > MaxK)
+      THEN
+        BEGIN
+          CrossValidationError := TRUE;
+          c := WriteErrorMessage('k-fold cross-validation: kValidate > maximum');
+          EXIT;
+        END;
+    n := MatrixRows(Data);
+    p := MatrixColumns(Data);
+    j := n DIV kValidate;  // number OF elements OF all submatrices except last
+    FOR i := 1 TO Pred(kValidate) DO
+      BEGIN
+        CreateMatrix(SplitData[i], j, p, 0.0);
+        IF MatrixError
+          THEN
+            BEGIN
+              CrossValidationError := TRUE;
+              MatrixError := FALSE;
+              c := WriteErrorMessage('k-fold cross-validation: not enough memory');
+              EXIT;
+            END;
+        Available[i] := j;
+      END;
+    CreateMatrix(SplitData[kValidate], j + (n MOD kValidate), p, 0.0);
+    // put left-overs into last group
+    IF MatrixError
+      THEN
+        BEGIN
+          CrossValidationError := TRUE;
+          MatrixError := FALSE;
+          c := WriteErrorMessage('k-fold cross-validation: not enough memory');
+          EXIT;
+        END;
+    Available[kValidate] := j + (n MOD kValidate);
+    FOR i := 1 TO n DO // randomly put each data row into one OF the kValidate submatrices
+      BEGIN
+        REPEAT
+          j := Round(RandomLaplace(1, kValidate)); // select group
+        UNTIL (Available[j] > 0);
+        GetRow(Data, i, CurrentRow);
+        h := Succ(MatrixRows(SplitData[j]) - Available[j]);
+        SetRow(SplitData[j], CurrentRow, h);
+        DEC(Available[j]);
+        DestroyVector(CurrentRow);
+      END;
+  END; { SplitDataMatrix }
+
+  PROCEDURE CreateTestData(CONST SplitData: SplitDataTyp; k, kValidate: WORD;
+                           VAR TestData: MatrixTyp);
+
+  VAR
+    j, n, p, Sum : WORD;
+    i            : 1..MaxK;
+    v            : VectorTyp;
+    c            : CHAR;
+
+  BEGIN
+    Sum := 0;
+    FOR i := 1 TO kValidate DO  // calculate number OF rows OF TEST data
+      IF i <> k
+        THEN
+          BEGIN
+            n := MatrixRows(SplitData[i]);
+            Sum := Sum + n;
+          END;
+    p := MatrixColumns(SplitData[1]);
+    CreateMatrix(TestData, Sum, p, 0.0);
+    IF MatrixError
+      THEN
+        BEGIN
+          CrossValidationError := TRUE;
+          MatrixError := FALSE;
+          c := WriteErrorMessage('k-fold cross-validation: not enough memory');
+          EXIT;
+        END;
+    Sum := 0;
+    FOR i := 1 TO kValidate DO
+      IF i <> k
+        THEN
+          BEGIN
+            FOR j := 1 TO MatrixRows(SplitData[i]) DO
+              BEGIN
+                INC(Sum);
+                GetRow(SplitData[i], j, v);
+                SetRow(TestData, v, Sum);
+                DestroyVector(v);
+              END;
+          END;
+  END; { CreateTestData }
+
+  END.
+\end{lstlisting}
+
+\subsubsection{Main program}
+
+\begin{lstlisting}[caption=Main program]
+  PROGRAM kNNTest;
+
+  USES
+    Math,            // free pascal standard math UNIT
+    MathFunc,        // basic math routines
+    Vector,          // vector algebra
+    Matrix,          // matrix algebra
+    Zufall,          // Random numbers
+    Deskript,        // descriptive statistics
+    kNN,             // k means clustering
+    CrossValidation  // k-fold cross-validation
+    ;
+
+  CONST
+    n = 112;     // data sets
+    p = 23;      // variables
+
+  VAR
+    Data, ValidationResult, TestData, Centroids : MatrixTyp;
+    SplitData                                   : SplitDataTyp;
+    i, j, k, l, kValidate, kmeans, done, Count  : WORD;
+    c                                           : CHAR;
+    Distance                                    : float;
+    Group                                       : GroupTyp;
+    WSS                                         : ARRAY[1..kNNmax] OF float;
+
+    PROCEDURE ReadCSV(n, p: WORD; FileName: STRING; VAR Data: MatrixTyp);
+    // Read correlation matrix from CSV FILE
+
+    VAR
+      InputFile : TEXT;
+      i, j      : WORD;
+      x         : float;
+      c         : CHAR;
+
+    BEGIN
+      Assign(InputFile, Filename);
+      Reset(InputFile);
+      IF IOResult <> 0
+        THEN
+          BEGIN
+            c := WriteErrorMessage('Unable to open file, Press <CR>');
+            HALT;
+          END;
+      ReadLn(InputFile);            // ignore first Line WITH headers
+      ReadLn(InputFile);            // ignore second Line WITH types
+      CreateMatrix(Data, n, p, 0.0);
+      IF MatrixError
+        THEN
+          BEGIN
+            c := WriteErrorMessage('program terminated');
+            HALT;
+          END;
+      FOR i := 1 TO n DO            // now Read data from following lines
+        BEGIN
+          FOR j := 1 TO p DO
+            BEGIN
+              x := ReadFloat(InputFile);
+              IF MathError
+                THEN
+                  BEGIN
+                    c := WriteErrorMessage('Unable to read datum, press <CR>');
+                    HALT;
+                  END;
+              SetMatrixElement(Data, i, j, x);
+            END; { for j }
+          ReadLn(InputFile);
+        END; { for i }
+      Close(InputFile);
+    END; { ReadCSV }
+
+
+  BEGIN
+    k := 2;
+    ReadCSV(n, p, 'All.csv', Data);
+    ShellSortMatrix(Data, 1);
+    // ensure that data are sorted by study no
+    kValidate := floor(Sqrt(n));                   // groups FOR k-fold cross-validation
+    IF kValidate > MaxK THEN kValidate := MaxK;
+    SplitDataMatrix(Data, kValidate, SplitData);
+    IF CrossValidationError
+      THEN
+        BEGIN
+          c := WriteErrorMessage('program terminated');
+          HALT;
+        END;
+    CreateMatrix(ValidationResult, n, 3, 0.0);
+    IF MatrixError
+      THEN
+        BEGIN
+          c := WriteErrorMessage('program terminated');
+          HALT;
+        END;
+    Count := 1;
+    FOR i := 1 TO kvalidate DO
+      BEGIN
+        CreateTestData(SplitData, i, kValidate, TestData);  // create a data vector
+        Writeln('Test data created ', i: 3);
+        IF CrossValidationError
+          THEN
+            BEGIN
+              c := WriteErrorMessage('program terminated');
+              HALT;
+            END;
+        Distance := kMeansCluster(TestData, k, Centroids, Group);
+        AssignTestData(SplitData[i], Centroids, Count, kValidate, ValidationResult);
+        WSS[i] := WithinSumOfSquares(ValidationResult);
+      END;
+  END.
+\end{lstlisting}
+
+\printbibliography[heading=subbibliography]
+\end{refsection}

@@ -1,0 +1,218 @@
+% -*- TeX:UK -*-
+\chapter{Pseudo-random numbers of various distributions}
+\begin{refsection}
+
+\abstract{This unit calculates pseudo-random numbers of various distributions}
+
+
+The interface is
+\begin{lstlisting}[caption=Interface of unit RandomNumbers]
+  UNIT Zufall;
+
+  INTERFACE
+
+  USES MathFunc, dos;
+
+  FUNCTION RandomLaplace(LowerLimit, UpperLimit: float): float;
+
+  FUNCTION RandomLaplace(LowerLimit, UpperLimit: LONGINT): LONGINT;
+
+  FUNCTION RandomBinominal(p: double; n: WORD): WORD;
+
+  FUNCTION RandomNormal(Average, SigmaSqr: double): double;
+
+  FUNCTION RandomExponential(Average: double): double;
+
+  FUNCTION RandomPoisson(Average: double): WORD;
+
+  FUNCTION RandomGamma(Form: WORD; Average: double): double;
+
+  FUNCTION RandomBernoulli(P: double): BYTE;
+
+  FUNCTION RandomGeometric(P: double): WORD;
+
+  FUNCTION RandomPareto(Minimum, Shape: double): double;
+
+  FUNCTION RandomChiSqr(DegFreedom: WORD): double;
+
+  FUNCTION RandomT(DegFreedom: WORD): double;
+
+  FUNCTION RandomF(f1, f2: WORD): double;
+
+  IMPLEMENTATION
+\end{lstlisting}
+
+\section{\Name{Laplace}-distribution}
+
+\texttt{RandomLaplace} generates discrete, linearly distributed random numbers from [LowerLimit..UpperLimit]. There are two versions of this routine, one for floating point and the other \texttt{LONGINT}.
+\begin{lstlisting}[caption=Laplace-distributed random numbers]
+  FUNCTION RandomLaplace(LowerLimit, UpperLimit: float): float;
+
+  VAR
+    dummy: float;
+
+  BEGIN
+    IF LowerLimit > UpperLimit
+      THEN
+        BEGIN
+          Dummy := LowerLimit;
+          LowerLimit := UpperLimit;
+          UpperLimit := Dummy;
+        END;
+    Result := LowerLimit + (UpperLimit - LowerLimit) * Random;
+  END;
+\end{lstlisting}
+
+\section{Binominal distribution}
+
+\texttt{RandomBinominal} returns the number of hits in n Trials with individual probability p.
+\begin{lstlisting}[caption=Linear]
+  FUNCTION RandomBinominal(p: double; n: WORD): WORD;
+
+  VAR
+    i, Sum: WORD;
+
+  BEGIN
+    Sum := 0;
+    FOR i := 1 TO n DO
+      IF Random <= p THEN INC(Sum);
+    Result := Sum;
+  END;
+\end{lstlisting}
+
+\section{Normal distribution}
+
+\texttt{RandomNormal} produces normally distributed random numbers.
+\begin{lstlisting}[caption=Normal]
+  FUNCTION RandomNormal(Average, SigmaSqr: double): double;
+
+  BEGIN
+    Result := Sqrt(-2 * Ln(Random)) * Sin(2 * Pi * Random) *
+      SigmaSqr + Average;
+  END;
+\end{lstlisting}
+
+\section{Exponential and \Name{Poisson} distribution}
+
+Exponentially distributed random numbers simulate the time in between random events of a given average rate (number of events per unit time is then Poisson-distributed).  Poisson-distributed random numbers simulate rare events per unit time (the time between events is then exponentially distributed). The \(\Gamma \)-distribution is a generalisation of exponential distribution, it allows the simulation of events with modus \(> 0 \), e.g., the life time of products until failure.
+\begin{lstlisting}[caption=Exponential Poisson and Gamma]
+  FUNCTION RandomExponential(Average: double): double;
+
+  BEGIN
+    Result := -Ln(Random) * Average;
+  END;
+
+
+  FUNCTION RandomPoisson(Average: double): WORD;
+
+  VAR
+    Count: WORD;
+    ProbZero, Product: double;
+
+  BEGIN
+    Count := 0;
+    Product := Random;
+    ProbZero := Exp(-Average);
+    WHILE Product > ProbZero DO
+      BEGIN
+        INC(Count);
+        Product := Product * Random;
+      END;
+    Result := Count;
+  END;
+
+
+  FUNCTION RandomGamma(Form: WORD; Average: double): double;
+
+  VAR
+    Zaehler: WORD;
+    Product: double;
+
+  BEGIN
+    Product := 1;
+    FOR Zaehler := 1 TO Form DO
+      Product := Product * Random;
+    Result := -Average * Ln(Product);
+  END;
+\end{lstlisting}
+
+\section{\Name{Bernoulli}-distribution}
+
+Bernoulli-distributed random numbers are either 0 or 1, they simulate for example the result of a coin toss. The geometric distribution simulates the number of trials required to get a 1 in Bernoulli-distributed experiments.
+\begin{lstlisting}[caption=Geometric and Bernoulli]
+  FUNCTION RandomBernoulli(P: double): BYTE;
+
+  BEGIN
+    Result := Ord(Random < P);
+  END;
+
+
+  FUNCTION RandomGeometric(P: double): WORD;
+
+  VAR
+    Count: WORD;
+
+  BEGIN
+    Count := 1;
+    WHILE Random > P DO
+      INC(Count);
+    Result := Count;
+  END;
+\end{lstlisting}
+
+\section{\skalar{\chi^2-, t-} and \skalar{F-} distribution}
+
+The following routines return random numbers that are \(\chi^2, t \) or \(F \)-distributed.
+\begin{lstlisting}[caption=Distribution for decission statistics]
+  FUNCTION RandomChiSqr(DegFreedom: WORD): double;
+
+  VAR
+    Zaehler: WORD;
+    Sum: double;
+
+  BEGIN
+    Sum := 0;
+    FOR Zaehler := 1 TO DegFreedom DO
+      Sum := Sum + Sqr(RandomNormal(0, 1));
+    Result := Sum;
+  END;
+
+
+  FUNCTION RandomT(DegFreedom: WORD): double;
+
+  VAR
+    Zaehler: WORD;
+    Sum: double;
+
+  BEGIN
+    Sum := 0;
+    FOR Zaehler := 1 TO DegFreedom DO
+      Sum := Sum + Sqr(RandomNormal(0, 1));
+    Result := RandomNormal(0, 1) * Sqrt(DegFreedom / Sum);
+  END;
+
+
+  FUNCTION RandomF(f1, f2: WORD): double;
+
+  BEGIN
+    Result := (RandomChiSqr(f1) / f1) / (RandomChiSqr(f2) / f2);
+  END;
+\end{lstlisting}
+
+\section{\Name{Pareto}-distribution}
+
+\Name{Pareto}-distributed random numbers give the damage amount that is not exceeded with a probability (Random \(\times \SI{100}{\%} \)).   Minimum is the minimal damage per claim (\( >= 0 \)) and Shape the exponent of the \Name{Pareto}-distribution (\( > 1 \)). \Name{Pareto}-distributions (also called 80/20 distributions) also describe efforts of diminishing returns, for example when \SI{20}{\%} of the total effort required achieve already \SI{80}{\%} of the result. Then higher and higher efforts are required to achieve less and less improvements.
+\begin{lstlisting}[caption=Pareto]
+  FUNCTION RandomPareto(Minimum, Shape: double): double;
+
+  BEGIN
+    Result := Minimum / Pot((1 - Random), 1 / Shape);
+  END;
+
+  END.  // Zufall
+\end{lstlisting}
+
+
+\printbibliography[heading=subbibliography]
+\end{refsection}
+

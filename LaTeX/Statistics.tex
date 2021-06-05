@@ -1,0 +1,67 @@
+% -*- TeX:UK -*-
+\NeedsTeXFormat{LaTeX2e}
+\documentclass[twoside,12pt,british]{scrbook}
+\usepackage{Eigene}
+
+\hypersetup{pdftitle={Statistics with routines  in Pascal}}
+
+\addbibresource{FA-References.bib}
+\setcounter{MaxMatrixCols}{15}   % needed for Mahalanobis example
+
+\title{Statistics\\ {\Large with routines in Pascal}}
+\author{Engelbert Buxbaum }
+\date{\today}
+
+\uppertitleback{Copyright \copyright\ 2021 by Dr. Engelbert Buxbaum (\href{mailto://engelbert_buxbaum@web.de}{\texttt{engelbert\_buxbaum@web.de}}).
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+A copy of the GNU General Public License is included in the manual. See also \href{https://www.gnu.org/licenses/}{https://www.gnu.org/licenses/}.
+ }
+
+\begin{document}
+
+\frontmatter
+\maketitle
+\tableofcontents
+
+\mainmatter
+\part{Fundamental maths}
+  \input{Math.inc}
+  \input{Complex.inc}
+  \input{BigSet.inc}
+  \input{Formula-compiler.inc}
+  \input{Vector.inc}
+  \input{Matrix.inc}
+     \input{SystemSolve.inc}
+     \input{EigenAnalysis.inc}
+     \input{SVD.inc}
+  \input{Dynamical.inc}
+\part{Univariate statistics}
+  \input{Distributions.inc}
+  \input{Zufall.inc}
+  \input{Descript.inc}
+  \input{Correlation-coefficients.inc}
+  \input{LinearRegression.inc}
+  \input{Simplex.inc}
+  \input{Circular.inc}
+\part{Multivariate Statistics}
+  \input{Missing.inc}
+  \input{Analysis.inc}
+     \input{PCA.inc}
+     \input{RealData.inc}
+     \input{Rotation.inc}
+  \input{ClusterAnalysis.inc}
+
+\backmatter
+\part{Appendix}
+  \input{Appendix.inc}
+  \input{gpl-3.0.inc}
+
+\end{document}
+
+
+

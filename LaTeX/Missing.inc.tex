@@ -1,0 +1,98 @@
+% -*- TeX:UK -*-
+\chapter{Definitions and concepts for multivariate statistics}\label{text:missing}
+\begin{refsection}
+
+\abstract{Multivariate statistics is used for dimensionality reduction, anomaly detection, unsupervised (feature extraction) and supervised learning (regression and classification) and for data mining. Incomplete data are a common, perhaps even universal, problem in studies using multivariate statistics. }
+
+\section{Tasks fore multivariate statistics}
+
+In descriptive statistics, a single variable is described for location (mean, median$\ldots$) and spread (standard deviation, interquartile distance$\ldots$). In simple regression, we use one independent variable \AbsVec{x} to predict a second, dependent variable \AbsVec{y}. In multivariate regression, each observation \( \AbsVec{x}_{i\cdot} \) consists of several variables. The corresponding dependent datum (if any) may be a scalar (\( \skalar{y}_i \)) or a vector (\( \AbsVec{y}_{i,\cdot} \)).
+
+Multivariate statistics is used for
+\begin{description}
+  \item[dimensionality reduction]{many correlated variables are reduced to fewer, uncorrelated ones. \acs{PCA} is used for this. }
+  \item[anomaly detection]{out of a large number of data, a few are isolated that come from a different distribution than the rest (outliers detection).}
+  \item[unsupervised learning]{there are only independent data available, aim is to discover the structure of these. Methods used include cluster and factor analysis.}
+  \item[supervised learning]{tries to predict the outcome (dependent) variables from the input (independent) variables \( \hat{y} = f(\arr{X}) \). A data set where both independent and dependent variables are known is used to train the algorithm. We distinguish
+      \begin{description}
+        \item[classification]{the outcome variable(s) are discrete (binary, ordinal, nominal).}
+        \item[regression]{the outcome variable(s) are cardinal (continuous). }
+      \end{description}
+      The input data may be of any level, even mixed.}
+\end{description}
+
+\subsection{Errors}
+
+Any prediction value \skalar{\hat{y}} from multivariate statistics will not be exactly equal to the measured value \skalar{y}. We distinguish
+\begin{description}
+  \item[bias]{is the result of a model that does not exactly describe the data. For example, fitting a straight line to parabolic data results in bias. Sometimes also the data collection was suboptimal. For example, in a study which managers are successful, the result may be biased against female or coloured candidates, simply because most real existing managers are white males. As a result of bias, a model \textbf{underfits} the data. }
+  \item[variance]{is the change of estimated parameters we would get if we used a different training data set from the same distribution. Reduction of variance means fitting a model also to the noise in the data, that is, \textbf{overfitting}. }
+  \item[variance of the error term \skalar{\epsilon}]{This term relates to measurement error of \AbsVec{y} and, in some cases, also of \arr{X}. It may also relate to the influence of additional, unmeasured variables.}
+\end{description}
+The \acf{MSE} is the sum of the variance, the squared bias and the variance of the error term \skalar{\epsilon}. Because all three terms (being squares) are necessarily positive, the total \acs{MSE} cannot fall below \( \mathrm{var}(\epsilon) \), the \textbf{irreducible error}. Squared bias and variance together form the \textbf{reducible error}, which we try to get as low as possible. As we increase the flexibility of the model (number of parameters), the bias will initially decrease faster than the variance increases, resulting in a decrease of \acs{MSE}. Beyond a certain optimal number of parameters, however, the bias will no longer decrease substantially. Thus, the increasing variance will lead to an increase in \acs{MSE}. If we plot \acs{MSE} against the number of parameters, we get a U-shaped curve. For classification, we use the classification error rate \( \frac{1}{n}\sum_{i=1}^n{I(\hat{\AbsVec{y}}_i \neq \AbsVec{y}_i)} \). The error calculated from the training data is nearly always lower than that calculated from a separate test data set not used in setting up the model.
+
+\subsubsection{Validation of models}\label{text:validation}
+
+Ideally, we have one data set to calculate the model from (learning set), and a second, independent set for validating the models accuracy (``out of bag observations''). In particular, we want to know wether we have over-fitted the data, that is, whether we may have inadvertently build a model for the noise component.
+
+The problem with this approach is that models become the more precise, the more data are used for their calculation. This becomes the more important, the more parameter the model has. Holding back a sizable fraction of the data for a test set will necessarily increase the bias of the model.
+
+One possible solution is to make the test set as small as possible, reducing it to a single case (\textbf{\acf{LOOCV}}). Thus, the model is build from \( n-1 \) cases, then a prediction is made for the remaining case. This process of selecting a test case and building the model for the remaining cases is repeated \skalar{n} times. The \skalar{n} models should be quite similar, as removing a single test case should not affect the parameters too much (if it does, we have identified a \textbf{high leverage} point). We also get \skalar{n} test results, from those we can calculate average deviation \(\mathrm{CV}_n = n^{-1} \sum_{i=1}^n{(\AbsVec{y}_i-\hat{\AbsVec{y}})} \).
+
+With least squares linear or polynomial fits, it is actually unnecessary to run the \(n \) fits, because
+\begin{equation}
+   \mathrm{CV}_n = n^{-1} \sum_{i=1}^n{\left(\frac{\AbsVec{y}_i-\hat{\AbsVec{y}}}{1-\AbsVec{h}_i}\right)^2}
+\end{equation}
+where \(\AbsVec{h}_i \) is the leverage of the \(i \)th point from equation \ref{eqn:leverage} on page \pageref{eqn:leverage}, which reflects the amount that an observation influences its own fit.
+
+Alternatively, it is possible to split the data set into \skalar{k} sets of equal size, \skalar{n-1} sets are used for model fitting, one set for calculating the squared errors. This process is repeated \skalar{k} times. Again, we get \skalar{n} error estimates, from which we can calculate the average. However, in this \textbf{\skalar{k}-fold cross validation} we had to build the model only \skalar{k}, not \skalar{n}, times, which is computationally more effective. In addition, rather than building \skalar{n} highly correlated models, we build only \skalar{k}, and their data sets overlap less than in \acs{LOOCV}. That tends to reduce variance, at the expense of a slight increase in bias. \skalar{k} is empirically set to between 5 and 10, to minimise both bias and variance. It is possible to repeat this process \skalar{l} times, so that \skalar{l} estimates are obtained for all \skalar{n} \( \hat{\AbsVec{y}}_i \).
+
+
+\section{Missing data}
+
+\subsection{Classes of missing data}
+
+We classify missing data according to seriousness \parencite{Rub-76,Ste-18}:
+\begin{description}
+  \item[\acf{MCAR}]{the probability of a datum \(\arr{X}_1 \) missing is unrelated to any of the observable variables, the unobserved variables (factors) or the response variable. The subjects with missing data are a random sample of the entire test population. In blind studies, randomness of treatment is assumed to be preserved. Example: sample vials accidentally destroyed during analysis. Both mean imputation and removal of incomplete cases can be performed without biasing the results of a study. }
+  \item[\acf{MAR}]{the probability of \(\arr{X}_1 \) missing correlates with either another observed covariate \(\arr{X}_2 \) or with the predictor or unobserved variable \(\AbsVec{y} \), but not with \(\arr{X}_1 \) itself. In principle, the missing value can be estimated from the non-missing data (multivariate imputation). Example: The willingness to answer in surveys questions about income may depend on other factors like sex, education, race or age. Thus, missing data on income can be ignored only if income statistics were generated with taking these factors into account (\textbf{ignorability assumption}). Otherwise, a non-response bias would result.  }
+  \item[\acf{MNAR}]{the probability that a variable is missing depends on
+      \begin{description}
+        \item[unobserved predictors]{For example in medical studies, patients may drop out more frequently if the treatment causes discomfort. Unless discomfort is recorded as additional variable, this will cause bias (underreporting of side effects).}
+        \item[to the value of the variable \(\arr{X}_1 \) itself]{Example: Students relegated from university in early semesters for poor grades would, on average, perform poorer than their peers in later semesters, if they had been allowed to continue (\textbf{non-ignorable non-response}). In the worst case, all cases where \(\arr{X}_1 \) exceeded a certain threshold are missing, this is called \textbf{censoring}. }
+      \end{description}
+      In \acs{MNAR}, both mean imputation of the missing data and removal of incomplete cases would seriously bias the result. }
+\end{description}
+This can be written as the probability of a datum in \(\AbsVec{x}_1 \) missing, given the feature \(\AbsVec{x}_1 \) itself, another correlating feature \(\AbsVec{x}_2 \) and the predictor variable (or factor) \(\AbsVec{y} \):
+\begin{equation}
+  \logit(\AbsVec{x}_1 \mathrm{missing}\ |\ \AbsVec{x}_1, \AbsVec{x}_2, \AbsVec{y}) =
+  \left\{
+  \begin{array}{r@{\;}l}
+    \alpha                                 &\quad \mathrm{MCAR}              \\
+    \alpha + \beta \AbsVec{x}_2            &\quad \mathrm{MAR}\ \AbsVec{x}   \\
+    \alpha + \beta \AbsVec{x}_2 \AbsVec{y} &\quad \mathrm{MAR}\ \AbsVec{xy}  \\
+    \alpha + \beta \AbsVec{x}_1            &\quad \mathrm{MNAR}\ \AbsVec{x}  \\
+    \alpha + \beta \AbsVec{x}_1 \AbsVec{y} &\quad \mathrm{MNAR}\ \AbsVec{xy} \\
+  \end{array}
+  \right.
+\end{equation}
+Written like this, \(\beta \) would be a measure of the severity of \acs{MNAR} and \acs{MAR}.
+
+It is, however, impossible to mathematically proof which class of missingness is realised in a particular study or in a particular variable. In particular missingness on unobserved variables is difficult to exclude, as by definition we cannot check the influence of ``lurking variables'' that we have not observed. In the end, we have to rely on our good judgement and do the best we can.
+
+\subsection{Handling missing data}\label{text:HandMiss}
+
+Several methods exist to deal with missing values:
+\begin{description}
+  \item[listwise deletion]{uses only complete cases. This method throws away a lot of information and will bias the data in case of \acs{MNAR}. In studies with a large number of variables \skalar{p} most if not all cases may be removed.}
+  \item[pairwise deletion]{(available case analysis) uses all available data pairs. Example: If a datum \(\AbsVec{X}_{ij} \) is missing, the correlation coefficient between \(\AbsVec{X}_{\cdot j} \) and any other column of \arr{X} is calculated, ignoring only the \skalar{i}th row. This results in covariance and correlation matrices that are not positive semi-definite. Standard error estimates are biased. However, all available information is used.}
+  \item[impute the mean (median, modal) value]{ of \(\arr{X}_{\cdot j} \) for each missing \(\arr{X}_{ij} \). Works with \acs{MCAR} data, but causes bias for \acs{MNAR}. It may also reduce error estimates and increase correlation between variables.}
+  \item[last value  carried  forward]{For example, in the study of student performance mentioned above, one may take the last available grade of a student and impute that for all missing ones that follow. This ignores any development that may have occurred over time.}
+  \item[hot-deck imputation]{determines the \skalar{k} nearest neighbours (or another scoring function) of \(\arr{X}_{i\cdot} \) with a datum \(\arr{X}_{ij} \) missing, ignoring the \(\arr{X}_{\cdot j} \) vector. Then, calculate the average of the available \(\arr{X}_{\cdot j} \) in the neighbourhood and use for imputation.}
+  \item[impute random values]{from a distribution that resembles the data. }
+  \item[multiple imputation]{Repeatedly draw imputation values for the missing data from a suitable distribution, perform the analysis and then compare the results. This gives a feeling for the sensitivity of the method on the missing data.}
+  \item[impute estimated value]{For various machine learning algorithms versions are available that can handle missing values, this will be discussed in the respective chapters. In such cases, the method itself may produce imputation values that are iteratively changed to optimise the learning result. This works best for \acs{MAR}.}
+\end{description}
+
+\printbibliography[heading=subbibliography]
+\end{refsection}

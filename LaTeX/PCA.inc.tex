@@ -1,0 +1,681 @@
+% -*- TeX:UK -*-
+\section{The unit PCA}
+
+The unit \acs{PCA} contains routines used by the program \texttt{Principal}. The interface is
+
+\begin{lstlisting}[caption=Interface of unit PCA]
+  UNIT PCA;
+
+  { Performs routines in the context of principle component analysis }
+
+  INTERFACE
+
+  USES Math, Mathfunc, Stat, Correlations, Vector, Matrix;
+
+  CONST
+    MaxVariables = 180;
+    SepChar = ';';
+    // IN Middle Europe variables IN CSV separated by ";" AS "," IS decimal separator
+    SigVecs: WORD = 5;
+    // number OF significant vectors, can be changed by calling PROGRAM
+    ProblemName: STRING = ''; // first name OF all files produced;
+    Border = 20;  // number OF ranges FOR statistical analysis OF correlations
+
+  TYPE
+    DataTypes = (binary, nominal, ordinal, interval, rational);
+    TypeVector = ARRAY[1..MaxVariables] OF DataTypes;
+    FreqsType = ARRAY[DataTypes, DataTypes, -Border..Border] OF WORD;
+
+
+  PROCEDURE ReadCSV(VAR Types: TypeVector; VAR Data: MatrixTyp);
+  { Read data from CSV file. }
+
+  PROCEDURE CalculateCorrelationMatrix(CONST Data: MatrixTyp;
+    CONST Types: TypeVector; VAR Cor: MatrixTyp);
+  { calculates correlation matrix for a mixed type data matrix. NaN-values
+    are handled. }
+
+  PROCEDURE ReadCorrelations(VAR Cor: MatrixTyp);
+  { If the correlation matrix has been calculated previously,
+    read it from CSV file }
+
+  PROCEDURE WriteCorrelations(CONST Cor: MatrixTyp; Shrunk: BOOLEAN);
+  { Writes the correlation matrix into a csv-file. File name will depend on
+    whether the matrix has been shrunk.}
+
+  PROCEDURE AnalyseFrequencies(CONST Cor: MatrixTyp; CONST Types: TypeVector;
+    VAR Freqs: FreqsType);
+  { Determine distribution of correlation coefficients by variable type }
+
+  FUNCTION Bartlett(CONST Cor: MatrixTyp; Cases: WORD): double;
+  { Bartlett's test for sphericity }
+
+  PROCEDURE ExplainedVariance(CONST EigenValues: VectorTyp;
+    VAR Acc, Variance, CumVariance: VectorTyp);
+  { calculate acceleration, explained variance and cumulative explained variance
+    from eigenvalues and writes them into a csv-file }
+
+  PROCEDURE WriteEigenVector(CONST EigenVectors: MatrixTyp);
+  { writes eigenvectors into a csv-file }
+
+  PROCEDURE MaximumLikelihood(CONST Data: MatrixTyp; CONST Types: TypeVector;
+    VAR ImputVector: VectorTyp);
+  { Determin average (cardinal) or most common (other) value of a column for
+    imputation }
+
+  PROCEDURE RobustProduct(CONST A, B: MatrixTyp; CONST ImputVector: VectorTyp;
+    VAR C: MatrixTyp);
+  { robust matrix product, elements of A (original data) may be NaN and are replaced
+    by the j-th element in ImputVector. For B (Eigenvectors) this precaution is not
+    necessary. Only the first Max eigenvectors are used. }
+
+  PROCEDURE WriteComponentScores(CONST Scores: MatrixTyp);
+  { writes component scores into a csv-file }
+
+  PROCEDURE CalculateLoadings(CONST Data, Scores: MatrixTyp;
+    CONST Types: TypeVector; VAR Loadings: MatrixTyp);
+
+  PROCEDURE CalculateCommunalities(CONST Loadings: MatrixTyp;
+    VAR Communalities, Uniqueness,
+    VarianceAccounted: VectorTyp);
+  { Row and column sums of squared loadings }
+
+  PROCEDURE WriteLoadings(CONST Loadings: MatrixTyp;
+    CONST Communalities, Uniqueness,
+    VarianceAccounted: VectorTyp;
+    Rotated: BOOLEAN);
+  { Writes loadings into a csv-file. File name will depend on whether the
+    loadings have been rotated. }
+
+  IMPLEMENTATION
+
+  VAR
+    Significance: SignificanceType;
+\end{lstlisting}
+
+The following procedure reads data from a .csv-file, the first row contains the variable names, the second the variable level (nominal, ordinal, interval and rational). The routine can be used for files following both US- and European conventions for decimal indicator (./,) and separation character (,/;):
+
+\begin{lstlisting}
+  PROCEDURE ReadCorrelations(VAR Cor: MatrixTyp);
+  // Read correlation matrix from CSV FILE
+
+  VAR
+    InputFile: TEXT;
+    c: CHAR;
+    s: STRING;
+    Variables, Error, i, j: WORD;
+    x: double;
+
+  BEGIN
+    Assign(InputFile, Problemname + '-NativeCorr.csv');
+    Reset(InputFile);
+    Variables := 0;
+    WHILE NOT EoLn(InputFile) DO  // Read first Line WITH variable numbers, count Variables
+      BEGIN   // nothing needs TO be done with these values
+        INC(Variables);
+        i := ReadInt(InputFile) ;
+      END; { while }
+    ReadLn(InputFile);            // go TO next Line
+    DEC(Variables);               // Line number
+    CreateMatrix(Cor, Variables, Variables, 0.0);
+    FOR i := 1 TO Variables DO    // now Read data from following lines
+      BEGIN
+        j := ReadInt(InputFile);  // Line number
+        FOR j := 1 TO Variables DO
+          SetMatrixElement(Cor, i, j, ReadFloat(InputFile));   // values
+        ReadLn(InputFile);
+      END; { for i }
+    Close(InputFile);
+    Writeln(Variables: 3, ' variables read, ');
+  END;
+\end{lstlisting}
+
+Calculating the correlation matrix can be time consuming. If this has been done already in the past, the following routine reads such a matrix from a file.
+
+\begin{lstlisting}[caption=Read correlation matrix from a csv-file]
+  PROCEDURE ReadCorrelations(VAR Cor: MatrixTyp);
+  // Read correlation matrix from CSV FILE
+
+  VAR
+    InputFile: TEXT;
+    c: CHAR;
+    s: STRING;
+    Variables, Error, i, j: WORD;
+    x: double;
+
+  BEGIN
+    Assign(InputFile, Problemname + '-NativeCorr.csv');
+    Reset(InputFile);
+    Variables := 0;
+    WHILE NOT EoLn(InputFile) DO  // Read first Line WITH variable numbers, count Variables
+      BEGIN   // nothing needs TO be done with these values
+        INC(Variables);
+        i := ReadInt(InputFile) ;
+      END; { while }
+    ReadLn(InputFile);            // go TO next Line
+    DEC(Variables);               // Line number
+    CreateMatrix(Cor, Variables, Variables, 0.0);
+    FOR i := 1 TO Variables DO    // now Read data from following lines
+      BEGIN
+        j := ReadInt(InputFile);  // Line number
+        FOR j := 1 TO Variables DO
+          SetMatrixElement(Cor, i, j, ReadFloat(InputFile));   // values
+        ReadLn(InputFile);
+      END; { for i }
+    Close(InputFile);
+    Writeln(Variables: 3, ' variables read, ');
+  END;
+\end{lstlisting}
+
+The following routine analyses the distribution frequency for the values in \arr{R} and writes them to a file.
+
+\begin{lstlisting}[caption=Determine frequency distribution of correlation coefficients]
+  PROCEDURE AnalyseFrequencies(CONST Cor: MatrixTyp; CONST Types: TypeVector;
+                               VAR Freqs: FreqsType);
+
+  CONST
+    TypeText: ARRAY [DataTypes] OF STRING[8] =
+      ('binary', 'nominal', 'ordinal', 'interval', 'rational');
+
+  VAR
+    i, j: DataTypes;
+    l, m, Variables: WORD;
+    k: INTEGER;
+    OutFile: TEXT;
+    x: double;
+
+  BEGIN
+    Assign(OutFile, ProblemName + '-Frequencies.csv');
+    Rewrite(OutFile);
+    Variables := MatrixRows(Cor);
+    FOR i := LOW(DataTypes) TO High(DataTypes) DO
+      FOR j := LOW(DataTypes) TO High(DataTypes) DO
+        FOR k := -Border TO Border DO
+          Freqs[i, j, k] := 0;
+    FOR l := 1 TO Variables DO
+      FOR m := 1 TO Variables DO
+        BEGIN
+          x := GetMatrixElement(Cor, l, m) * Border;
+          INC(Freqs[Types[l], Types[m], Round(x)]);
+        END;
+    FOR i := LOW(DataTypes) TO High(DataTypes) DO
+      BEGIN
+        Writeln(OutFile, TypeText[i]: 8, SepChar);
+        FOR j := LOW(DataTypes) TO High(DataTypes) DO
+          BEGIN
+            Write(OutFile, SepChar, TypeText[j]: 8, SepChar);
+            FOR k := -Border TO Border DO
+              Write(OutFile, Freqs[i, j, k]: 4, SepChar);
+            Writeln(OutFile);
+          END;
+      END;
+    Close(OutFile);
+  END;
+\end{lstlisting}
+
+The \texttt{procedure CalculateCorrelationMatrix} can calculate correlation coefficients appropriate for the levels of the data. In practice, it is often better to calculate \Name{Pearson}'s product moment correlation \skalar{r_p} for binary, ordinal, interval and rational data, and to avoid nominal data at all. This minimises rank deficiency of the correlation matrix. If that is all that is desired, the \texttt{case}-statement can be simplified accordingly.
+
+\begin{lstlisting}[caption=Calculate the correlation matrix]
+  PROCEDURE CalculateCorrelationMatrix(CONST Data: MatrixTyp;  CONST Types:
+            TypeVector; VAR Cor: MatrixTyp);
+
+  VAR
+    i, j, Variables: WORD;
+    IVector, JVector: VectorTyp;
+    Rxy: double;
+    Cont: ContTable;
+
+  BEGIN
+    Variables := MatrixColumns(Data);
+    CreateIdentityMatrix(Cor, Variables);
+    GetColumn(Data, i, IVector);
+    for i := 1 to Variables do
+      begin
+        SetMatrixElement(Cor, i, i, 1.0);    // diagonal
+        GetColumn(Data, i, IVector);
+        FOR j := Succ(i) TO Variables DO
+          BEGIN
+            GetColumn(Data, j, JVector);
+            CASE Types[i] OF
+              nominal: CASE Types[j] OF
+                        nominal:  BEGIN
+                                    Contingency(IVector, JVector, Cont);
+                                    Rxy := lambda(Cont);
+                                    Rxy := sign(Rxy) * Sqrt(Abs(Rxy));
+                                    DestroyContingency(Cont);
+                                  END;
+                        ordinal:  BEGIN
+                                    Contingency(IVector, JVector, Cont);
+                                    Rxy := theta(Cont);
+                                    Rxy := Sqrt(Rxy);
+                                    // asymmetric: only positive values!
+                                    DestroyContingency(Cont);
+                                  END;
+                        binary:   BEGIN
+                                    Contingency(IVector, JVector, Cont);
+                                    Rxy := lambda(Cont);
+                                    Rxy := sign(Rxy) * Sqrt(Abs(Rxy));
+                                    DestroyContingency(Cont);
+                                  END;
+                        interval,
+                        rational: BEGIN
+                                    Rxy := eta_sqr(IVector, JVector, Significance);
+                                    Rxy := Sqrt(Rxy);
+                                    // asymmetric: only positive values!
+                                  END;
+                       END;
+              ordinal: CASE Types[j] OF
+                        nominal:  BEGIN
+                                    Contingency(JVector, IVector, Cont);
+                                    Rxy := theta(Cont);
+                                    Rxy := Sqrt(Rxy);
+                                    DestroyContingency(Cont);
+                                  END;
+                        ordinal:  BEGIN
+                                    Rxy :=
+                                      OrdinalCorrelations(IVector, JVector, 'E', Significance);
+                                    Rxy := sign(Rxy) * Sqrt(Abs(Rxy));
+                                  END;
+                        binary:   BEGIN
+                                    Rxy :=
+                                      OrdinalCorrelations(IVector, JVector, 'E', Significance);
+                                    Rxy := sign(Rxy) * Sqrt(Abs(Rxy));
+                                  END;
+                        interval,
+                        rational: Rxy := SpearmanRankCorrelation(IVector, JVector, Significance);
+                      END;
+              binary: CASE Types[j] OF
+                        nominal:  BEGIN
+                                    Contingency(IVector, JVector, Cont);
+                                    Rxy := lambda(Cont);
+                                    Rxy := sign(Rxy) * Sqrt(Abs(Rxy));
+                                    DestroyContingency(Cont);
+                                  END;
+                        ordinal:  BEGIN
+                                    Rxy := OrdinalCorrelations(IVector, JVector, 'E', Significance);
+                                    Rxy := sign(Rxy) * Sqrt(Abs(Rxy));
+                                  END;
+                        binary:   BEGIN
+                                    Contingency(IVector, JVector, Cont);
+                                    Rxy := lambda(Cont);
+                                    Rxy := sign(Rxy) * Sqrt(Abs(Rxy));
+                                    DestroyContingency(Cont);
+                                  END;
+                        interval,
+                        rational:  Rxy := PointBiserialCorrelation(IVector, JVector, Significance);
+                END;
+            interval,
+            rational: CASE Types[j] OF
+                        nominal:  BEGIN
+                                    Rxy := eta_sqr(JVector, IVector, Significance);
+                                    Rxy := Sqrt(Rxy);
+                                  END;
+                        ordinal: Rxy := SpearmanRankCorrelation(IVector, JVector, Significance);
+                        binary:  Rxy := PointBiserialCorrelation(JVector, IVector, Significance);
+                        interval,
+                        rational: Rxy := PearsonProductMomentCorrelation(IVector, JVector, Significance);
+                      END;
+            END; { case Types[i] }
+            SetMatrixElement(Cor, i, j, Rxy);    // upper half
+            SetMatrixElement(Cor, j, i, Rxy);    // lower half
+            Writeln(i:4, ' ', j:4, ' ', Rxy:3:3);
+            DestroyVector(JVector);
+          END;  { for j }
+        DestroyVector(IVector);
+      END; { for i }
+    Write('Correlation matrix calculated, ');
+  END;
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Write the correlation matrix to a csv-file]
+  PROCEDURE WriteCorrelations(CONST Cor: MatrixTyp; Shrunk: BOOLEAN);
+
+  VAR
+    i, j: WORD;
+    OutFile: TEXT;
+
+  BEGIN
+    IF Shrunk
+      THEN Assign(OutFile, ProblemName + '-ShrunkCorr.csv')
+      ELSE Assign(OutFile, Problemname + '-NativeCorr.csv');
+    Rewrite(OutFile);
+    Write(OutFile, SepChar);
+    FOR j := 1 TO Cor^.Columns DO
+      Write(OutFile, j: 4, SepChar); // LABEL columns
+    Writeln(OutFile);
+    FOR i := 1 TO Cor^.Rows DO // the matrix itself
+      BEGIN
+        Write(OutFile, i: 4, SepChar); // LABEL row
+        FOR j := 1 TO Cor^.Columns DO
+          Write(OutFile, GetMatrixElement(Cor, i, j):7:4, ';');
+        Writeln(OutFile);
+      END;  { for i }
+    Close(OutFile);
+    Writeln('Correlations written to file, ');
+  END; { WriteCorrelations}
+\end{lstlisting}
+
+\Name{Bartlett}'s test for sphericity calculates the probability for the null-hypothesis \(H_0: \arr{R} = \arr{I} \). In that case, the data would be uncorrelated (except for experimental error), and a \acs{PCA} or factor analysis would be pointless.
+
+\begin{lstlisting}[caption=Perform Bartlett's sphericity-test]
+  FUNCTION Bartlett(CONST Cor: MatrixTyp; Cases: WORD): double;
+
+  VAR
+    f, Variables: WORD;
+    chi2, Det, P0: extended;
+
+  BEGIN
+    Variables := MatrixRows(Cor);
+    Det := Determinante(Cor);
+    Write('Determinante = ', det: 10, ' ');
+    IF (Det < Zero)                           // singular matrix
+      THEN
+        BEGIN
+          Result := NaN;
+          Writeln('Bartlet = NaN');
+          EXIT;
+        END;
+    chi2 := -(Pred(Cases) - (2 * Variables + 5) / 6) * log(Det, 10);
+    f := Round(Variables * Pred(Variables) / 2);
+    Write('chi2 := ', chi2: 5: 3, ' ', 'f = ', f: 5, ' ');
+    P0 := IntegralChi(chi2, f);
+    Writeln('P0 = ', P0: 1: 4);
+    Result := P0;
+  END;
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Write eigenvalues and statistics to file]
+  PROCEDURE ExplainedVariance(CONST EigenValues: VectorTyp;
+    VAR Acc, Variance, CumVariance: VectorTyp);
+
+  VAR
+    i, Variables: WORD;
+    x, Sum, Cummulative: double;
+    OutFile: TEXT;
+
+  BEGIN
+    Variables := VectorLength(EigenValues);
+    CreateVector(Variance, Variables, 0.0);
+    CreateVector(CumVariance, Variables, 0.0);
+    CreateVector(Acc, Variables, 0.0);
+    Sum := 0;
+    i := 1;
+    FOR i := 1 TO Variables DO
+      Sum := Sum + GetVectorElement(EigenValues, i);
+    Cummulative := 0;
+    FOR i := 2 TO Pred(Variables) DO //  second derivative OF the scree-curve by finite differences
+      SetVectorElement(Acc, i, GetVectorElement(EigenValues, Succ(i)) -
+         2*GetVectorElement(EigenValues, i) +  GetVectorElement(EigenValues, Pred(i)));
+    SetVectorElement(Acc, 1, NaN);
+    SetVectorElement(Acc, Variables, NaN);
+    Assign(OutFile, ProblemName + '-EigenValues.csv');
+    Rewrite(OutFile);
+    FOR i := 1 TO Variables DO
+      BEGIN
+        x := GetVectorElement(EigenValues, i) / Sum;
+        Cummulative := Cummulative + x;
+        SetVectorElement(Variance, i, x);
+        SetVectorElement(CumVariance, i, Cummulative);
+        Write(OutFile, i: 3, SepChar, GetVectorElement(EigenValues, i):3:3, SepChar,
+          x:3:3, SepChar, Cummulative:3:3);
+        Writeln(OutFile, SepChar, GetVectorElement(Acc, i):3:3);
+      END;
+    Close(OutFile);
+  END;
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Write eigenvectors to file]
+  PROCEDURE WriteEigenVector(CONST EigenVectors: MatrixTyp);
+
+  VAR
+    i, j: WORD;
+    OutFile: TEXT;
+
+  BEGIN
+    Assign(OutFile, ProblemName + '-EigenVectors.csv');
+    Rewrite(OutFile);
+    FOR i := 1 TO MatrixRows(EigenVectors) DO
+      BEGIN
+        Write(OutFile, i: 3, SepChar);
+        FOR j := 1 TO SigVecs DO
+          Write(OutFile, GetMatrixElement(EigenVectors, i, j): 3: 3, SepChar);
+        Writeln(OutFile);
+      END;
+    Close(OutFile);
+  END;
+\end{lstlisting}
+
+For the calculation of the correlation matrix we ignored missing values. If this is done for the calculation of the scores, the product of the data with the projection matrix \arr{F}, then each missing value would set both the corresponding row and column of \arr{C} to \acs{NaN}. That way, even relatively few missing data may result in an all-\acs{NaN} score matrix \arr{C}. The calculation of the score matrix therefore requires imputation (see chapter \ref{text:missing} for a discussion of missing values). In this unit, for interval and rational data we use the arithmetic mean of each data vector as maximum likelihood estimator for the missing datum, for binary, nominal and ordinal data, we use the most common value of each vector (see section \ref{text:HandMiss} on page \pageref{text:HandMiss} on methods to handle missing data).
+
+\begin{lstlisting}[caption=Robust calculation of scores]
+  PROCEDURE MaximumLikelihood(CONST Data: MatrixTyp; CONST Types: TypeVector;
+    VAR ImputVector: VectorTyp);
+
+  VAR
+    i, j, n, p, s, iMax: WORD;
+    JVector: VectorTyp;
+    x: double;
+    Numbers: ARRAY [1..MaxSteps] OF WORD;
+
+  BEGIN
+    n := MatrixRows(Data);
+    p := MatrixColumns(Data);
+    CreateVector(ImputVector, p, 0.0);
+    FOR j := 1 TO p DO
+      BEGIN
+        GetColumn(Data, p, JVector);
+        CASE Types[j] OF
+          binary,
+          nominal,
+          ordinal:  BEGIN
+                      FOR i := 1 TO MaxSteps DO Numbers[i] := 0;
+                      FOR i := 1 TO n DO
+                        BEGIN
+                          x := GetVectorElement(JVector, i);
+                          IF IsNaN(x)
+                            THEN
+                            ELSE INC(Numbers[Round(x)]);
+                        END;
+                      x := 0;
+                      iMax := 0;
+                      FOR i := 1 TO MaxSteps DO
+                        IF (Numbers[i] > x)
+                          THEN
+                            BEGIN
+                              x := Numbers[i];
+                              iMax := i;
+                            END;
+                      SetVectorElement(ImputVector, j, iMax); // most common element
+                    END;
+          interval,
+          rational: BEGIN
+                      x := NeumaierSum(JVector)/ActualElements(JVector); //arithmetic mean
+                      SetVectorElement(ImputVector, j, x);
+                    END;
+        END;  // case
+        DestroyVector(JVector);
+      END;
+  END;
+
+  PROCEDURE RobustProduct(CONST A, B: MatrixTyp; CONST ImputVector: VectorTyp;
+    VAR C: MatrixTyp);
+
+  VAR
+    i, j, k: WORD;
+    Sum: double;
+
+  BEGIN
+    IF MatrixColumns(A) <> MatrixRows(B)
+      THEN
+        BEGIN
+          Write(' Matrix multiplication: A.Columns <> B.Rows');
+          ReadLn;
+          EXIT;
+        END;
+    IF MatrixColumns(B) < SigVecs
+      THEN
+        BEGIN
+          Write(' Matrix multiplication: Number of Eigenvectors < SigVecs ');
+          ReadLn;
+          EXIT;
+        END;
+    CreateMatrix(C, MatrixRows(A), SigVecs, 0);
+    FOR i := 1 TO MatrixRows(A) DO
+      FOR j := 1 TO SigVecs DO
+        BEGIN
+          Sum := 0;
+          FOR k := 1 TO MatrixColumns(A) DO
+            IF IsNaN(GetMatrixElement(A, i, k))
+              THEN Sum := Sum + GetVectorElement(ImputVector, k) *
+                           GetMatrixElement(B, k, j)
+            //  replace NaN WITH max likelyhood estimator
+              ELSE Sum := Sum + GetMatrixElement(A, i, k) * GetMatrixElement(B, k, j);
+          SetMatrixElement(C, i, j, Sum);
+        END;
+  END;
+
+  PROCEDURE WriteComponentScores(CONST Scores: MatrixTyp);
+
+  VAR
+    i, j: WORD;
+    OutFile: TEXT;
+
+  BEGIN
+    Assign(OutFile, ProblemName + '-Scores.csv');
+    Rewrite(OutFile);
+    FOR i := 1 TO MatrixRows(Scores) DO
+      BEGIN
+        FOR j := 1 TO SigVecs DO
+          Write(OutFile, GetMatrixElement(Scores, i, j): 3: 3, SepChar);
+        Writeln(OutFile);
+      END;
+    Close(OutFile);
+  END;
+\end{lstlisting}
+
+The loadings \arr{L} are the correlations between each variable and each column of the score matrix. Just as with the calculation of the correlation matrix \arr{R}, it has been found that assuming all binary, ordinal, interval and rational variables to be rational, and not to use nominal data, gives better results than the mixed correlation coefficients used in the routine below. If this is all that is desired, the \texttt{case}-statement below can be simplified.
+
+\begin{lstlisting}[caption=Calculate and write loadings to csv-file]
+  PROCEDURE CalculateLoadings(CONST Data, Scores: MatrixTyp;
+    CONST Types: TypeVector; VAR Loadings: MatrixTyp);
+
+  VAR
+    i, j, p : WORD;
+    Rxy: double;
+    DataVector, ScoreVector: VectorTyp;
+    Significance: SignificanceType;
+
+  BEGIN
+    p := MatrixColumns(Data);
+    CreateMatrix(Loadings, p, SigVecs, 0.0);
+    FOR i := 1 TO p DO                           // over all variables
+      BEGIN
+        GetColumn(Data, i, DataVector);
+        FOR j := 1 TO SigVecs DO                  // over all Scores
+          BEGIN
+            GetColumn(Scores, j, ScoreVector);      // JVector IS always rational
+            CASE Types[i] OF
+              binary:   Rxy := PointBiserialCorrelation(DataVector,
+                  ScoreVector, Significance);
+              nominal:  Rxy := Sqrt(eta_sqr(DataVector, ScoreVector, Significance));
+              // by definition always positive
+              ordinal:  Rxy := SpearmanRankCorrelation(DataVector,
+                  ScoreVector, Significance);
+              interval,
+              rational: Rxy := PearsonProductMomentCorrelation(DataVector, ScoreVector, Significance);
+            END;
+            SetMatrixElement(Loadings, i, j, Rxy);
+            DestroyVector(ScoreVector);
+          END;
+        DestroyVector(DataVector);
+      END;
+  END;
+\end{lstlisting}
+
+The communality is the column vector of the rows sum of squared loadings: \(\AbsVec{h}_j = \sum_{k=1}^q{\AbsVec{l}_{jk}^2} \), this gives the proportion of variance in a variable that is explained by the factors. Sometimes the uniqueness \(\AbsVec{u}_j = 1 - \AbsVec{h}_j \) is used instead, this is the specific variance of a variable, the variance it does not have in common with other variables. \Name{Hoffman}'s index of complexity \parencite{Hof-77} for each item is \(\frac{(\sum_{k=1}^{q}{l_{jk}^2})^2}{\sum_{j=1}^{q}{l_{jk}^4}} \).
+
+If the sum of squared column elements is calculated, we get the sum of squared loadings. Their sum is equal to the sum of the first \skalar{q} eigenvalues. Dividing each element of this vector by the total, we get the variance accounted for, the part of the variance in the data that is explained by each factor.
+
+\begin{lstlisting}[caption=Calculate statistics of loading-matrix]
+  PROCEDURE CalculateCommunalities(CONST Loadings: MatrixTyp;
+              VAR Communalities, Uniqueness, VarianceAccounted: VectorTyp);
+
+  VAR
+    i, j, Rows, Columns: WORD;
+    Sum1, Sum2, x, y: double;
+
+  BEGIN
+    Rows := MatrixRows(Loadings);
+    Columns := MatrixColumns(Loadings);
+    CreateVector(Communalities, Rows, 0);
+    FOR i := 1 TO Rows DO
+      BEGIN
+        Sum1 := 0;
+        FOR j := 1 TO SigVecs DO
+          Sum1 := Sum1 + Sqr(GetMatrixElement(Loadings, i, j));
+        // row sum OF squared loadings
+        SetVectorElement(Communalities, i, Sum1);
+      END;
+    CreateVector(VarianceAccounted, Columns + 2, 0.0);
+    FOR j := 1 TO Columns DO
+      BEGIN
+        Sum1 := 0;
+        FOR i := 1 TO Rows DO
+          Sum1 := Sum1 + Sqr(GetMatrixElement(Loadings, i, j));
+        // column sum OF squared loadings
+        SetVectorElement(VarianceAccounted, j, Sum1);
+      END;
+    CreateVector(Uniqueness, Rows, 0);
+    Sum1 := 0;
+    Sum2 := 0;
+    FOR i := 1 TO Rows DO
+      BEGIN
+        x := GetVectorElement(Communalities, i);
+        y := 1 - x;
+        SetVectorElement(Uniqueness, i, y);
+        Sum1 := Sum1 + x;                    // explained
+        Sum2 := Sum2 + y;                    // unexplained
+      END;
+    SetVectorElement(VarianceAccounted, Columns + 1, Sum1);
+    SetVectorElement(VarianceAccounted, Columns + 2, Sum2);
+  END;
+
+
+  PROCEDURE WriteLoadings(CONST Loadings: MatrixTyp; CONST Communalities, Uniqueness,
+                          VarianceAccounted: VectorTyp; Rotated: BOOLEAN);
+
+  VAR
+    n, i, j: WORD;
+    OutFile: TEXT;
+    Variance: double;
+
+  BEGIN
+    IF Rotated
+      THEN Assign(OutFile, ProblemName + '-RotLoad.csv')
+      ELSE Assign(OutFile, ProblemName + '-Loadings.csv');
+    Rewrite(OutFile);
+    n := MatrixRows(Loadings);
+    FOR i := 1 TO n DO
+      BEGIN
+        FOR j := 1 TO SigVecs DO
+          Write(OutFile, GetMatrixElement(Loadings, i, j):3:3, SepChar);
+        Writeln(OutFile, SepChar, GetVectorElement(Communalities, i):3:3, SepChar,
+          GetVectorElement(Uniqueness, i):3:3, SepChar);
+      END;
+    Writeln(OutFile);
+    FOR j := 1 TO SigVecs DO
+      Write(OutFile, GetVectorElement(VarianceAccounted, j):3:3, SepChar);
+    Writeln(OutFile, GetVectorElement(VarianceAccounted, SigVecs + 1):3:3, SepChar,
+      GetVectorElement(VarianceAccounted, SigVecs + 2):3:3, SepChar);
+    Variance := GetVectorElement(VarianceAccounted, SigVecs + 1) +
+      GetVectorElement(VarianceAccounted, SigVecs + 2);
+    FOR j := 1 TO SigVecs DO
+      Write(OutFile, GetVectorElement(VarianceAccounted, j) / Variance:3:3, SepChar);
+    Writeln(OutFile, GetVectorElement(VarianceAccounted, SigVecs + 1) / Variance:3:3, SepChar,
+      GetVectorElement(VarianceAccounted, SigVecs + 2) / Variance:3:3, SepChar);
+    Close(OutFile);
+  END;
+
+
+  END. // PCA
+\end{lstlisting}

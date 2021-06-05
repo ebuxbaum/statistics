@@ -1,0 +1,1482 @@
+\chapter{Complex numbers}
+\begin{refsection}
+
+\abstract{Under standard Pascal, functions could only return simple data types. Complex numbers are -- in essence -- a record. However, Object Pascal allows such compound data types to be returned by functions.}
+
+ The routines are based on \parencite{Gie-87,Thi-89}. The interface is:
+
+\begin{lstlisting}[caption=Interface of \texttt{Complex}]
+  UNIT Complex;
+
+  INTERFACE
+
+  USES Math, mathfunc;
+
+  TYPE
+    ComplexTyp = RECORD
+      RealPart,
+      ImagPart: float;
+    END;
+
+  CONST Const_i    : ComplexTyp = (RealPart : 0.0; ImagPart : 1.0);
+        Const_Null : ComplexTyp = (RealPart : 0.0; ImagPart : 0.0);
+
+  VAR
+    ComplexError: BOOLEAN = FALSE;     // error-Flag
+
+  { ************************ Type conversion **************************** }
+
+  FUNCTION ComplexInit(RePart, ImPart: float): ComplexTyp;
+
+  FUNCTION Re(z: ComplexTyp): float;
+  { real part of a ComplexTyp number }
+
+  FUNCTION Im(z: ComplexTyp): float;
+  { imaginary part of a ComplexTyp number }
+
+  { *************************** E/A- Routines *************************** }
+
+  FUNCTION ComplexToStr(z: ComplexTyp; m, n: BYTE): STRING;
+
+  { ***************************** Conversions *************************** }
+
+  FUNCTION ComplexIsNull(z: ComplexTyp): BOOLEAN;
+
+  FUNCTION ComplexConj(z: ComplexTyp): ComplexTyp;
+
+  FUNCTION ComplexAbs(z: ComplexTyp): float;
+
+  FUNCTION ComplexArg(z: ComplexTyp): float;
+
+  FUNCTION ComplexInv(z: ComplexTyp): ComplexTyp;
+
+  FUNCTION ComplexNeg(z: ComplexTyp): ComplexTyp;
+
+  PROCEDURE Polar(z: ComplexTyp; VAR r, phi: float);
+
+  FUNCTION Rect(r, phi: float): ComplexTyp;
+
+  { ***************** Calculation with ComplexTyp ************** }
+
+   OPERATOR = (z, b: ComplexTyp) : BOOLEAN;
+
+   OPERATOR + (z, b: ComplexTyp): ComplexTyp;
+
+   OPERATOR - (z, b: ComplexTyp): ComplexTyp;
+
+   OPERATOR - (z: ComplexTyp): ComplexTyp;   // unary -
+
+   OPERATOR * (z, b: ComplexTyp): ComplexTyp;
+
+   OPERATOR / (z, b: ComplexTyp): ComplexTyp;
+
+   OPERATOR ** (Basis, Exponent: ComplexTyp): ComplexTyp;
+
+   { *********** Calculation with ComplexTyp and Real *********** }
+
+   OPERATOR = (z: ComplexTyp; x: float) : BOOLEAN;
+
+   OPERATOR = (x: float; z: ComplexTyp) : BOOLEAN;
+
+   OPERATOR := (x: real) : ComplexTyp;
+
+   OPERATOR := (z: ComplexTyp) : real;
+
+   OPERATOR + (z: ComplexTyp; x: float) : ComplexTyp;
+
+   OPERATOR + (x: float; z: ComplexTyp) : ComplexTyp;
+
+   OPERATOR - (z : ComplexTyp; r : real) : ComplexTyp;
+
+   OPERATOR - (r : real; z : ComplexTyp) : ComplexTyp;
+
+   OPERATOR * (z: ComplexTyp; x: float): ComplexTyp;
+
+   OPERATOR * (x: float; z: ComplexTyp) : ComplexTyp;
+
+   OPERATOR / (z: ComplexTyp; x: float): ComplexTyp;
+
+   OPERATOR / (x: float; z: ComplexTyp) : ComplexTyp;
+
+   OPERATOR ** (Basis : ComplexTyp; Exponent : float) : ComplexTyp;
+
+   OPERATOR ** (Basis : float; Exponent : ComplexTyp) : ComplexTyp;
+
+  { ********************** Powers, roots ****************************** }
+
+  FUNCTION ComplexLn(z: ComplexTyp): ComplexTyp;
+  { ln(z) = ln(abs(z)) + i * arg(z) }
+
+  FUNCTION ComplexExp(z: ComplexTyp): ComplexTyp;
+  { exp(x + iy) = exp(x)*cos(y) + i*exp(x)*sin(y) }
+
+  FUNCTION ComplexPower(Basis, Exponent: ComplexTyp): ComplexTyp;
+  { b^e = exp(e * ln(b)) }
+
+  FUNCTION ComplexPower(Basis: ComplexTyp; Exponent: float): ComplexTyp;
+  { z^x = exp(x * ln(z)) }
+
+  FUNCTION ComplexPower(Basis: float; Exponent: ComplexTyp): ComplexTyp;
+  { x^z = exp(z * ln(x)) }
+
+  FUNCTION ComplexRoot(z, b: ComplexTyp): ComplexTyp;
+  { b-te Wurzel aus z = z^(1/b) }
+
+  FUNCTION ComplexRoot(z: ComplexTyp; x: float): ComplexTyp;
+  { x-te Wurzel aus z = z^(1/x) }
+
+  FUNCTION ComplexRoot(x: float; z: ComplexTyp): ComplexTyp;
+  { z-te Wurzel aus x = x^(1/z) }
+
+  { *********************** Cyclometric functions ************************** }
+
+  FUNCTION ComplexSin(z: ComplexTyp): ComplexTyp;
+  { sin(x +- iy) = sin(x) * cosh(y) +- i * cos(x) * sinh(y) }
+
+  FUNCTION ComplexCos(z: ComplexTyp): ComplexTyp;
+  { cos(x +- iy) = cos(x) * cosh(y) +- i * sin(x) * sinh(y) }
+
+  FUNCTION ComplexTan(z: ComplexTyp): ComplexTyp;
+  { tan(x +- iy) = (sin(2x) / (cos(2x) + cosh(2x)) +- i * (sinh(2x) / (cos(2x) + cosh(2x)) }
+
+  FUNCTION ComplexCot(z: ComplexTyp): ComplexTyp;
+  { cot(z) = cos(z) / sin(z) }
+
+  FUNCTION ComplexArcSin(z: ComplexTyp): ComplexTyp;
+  { arcsin(z) = 1/i * ln(i*z + sqrt(1 - sqr(z))) }
+
+  FUNCTION ComplexArcCos(z: ComplexTyp): ComplexTyp;
+  { arccos(z) = 1/i * ln(z + sqrt(sqr(z) - 1)) }
+
+  FUNCTION ComplexArcTan(z: ComplexTyp): ComplexTyp;
+  { arctan(z) = 1/2i * ln((1+iz) / (1-iz)) }
+
+  FUNCTION ComplexArcCot(z: ComplexTyp): ComplexTyp;
+  { arccot(z) = -1/2i * ln((1+iz) / (iz - 1)) }
+
+  { *********************** Hyperbolic funktions ********************** }
+
+  FUNCTION ComplexSinh(z: ComplexTyp): ComplexTyp;
+  { sinh(x + iy) = sinh(x)*cos(y) +- i*cosh(x)*sin(y)
+                 = (exp(z) - exp(-z)) / 2 }
+
+  FUNCTION ComplexCosh(z: ComplexTyp): ComplexTyp;
+  { cosh(x + iy) = cosh(x)*cos(y) +- i*sinh(x)*sin(y)
+                 = (exp(z) + exp(-z)) / 2 }
+
+  FUNCTION ComplexTanh(z: ComplexTyp): ComplexTyp;
+  { tanh(x + iy) = (sinh(2x)/(cosh(2x)+cos(2y)) + i*(sin(2y)/(cosh(2x)+cos(2y)))
+                 = (exp(z) - exp(-z)) / (exp(z) + exp(-z)) }
+
+  FUNCTION ComplexCoth(z: ComplexTyp): ComplexTyp;
+  { coth(z) = cosh(z) / sinh(z) }
+
+  FUNCTION ComplexArSinh(z: ComplexTyp): ComplexTyp;
+  { arsinh(z) = ln(z + sqrt(sqr(z) + 1)) }
+
+  FUNCTION ComplexArCosh(z: ComplexTyp): ComplexTyp;
+  { arcosh(z) = ln(z + sqrt(sqr(z) - 1)) }
+
+  FUNCTION ComplexArTanh(z: ComplexTyp): ComplexTyp;
+  { artanh(z) := -1/2 * ln((1 + z) / (1 - z)) }
+
+  FUNCTION ComplexArCoth(z: ComplexTyp): ComplexTyp;
+  { arcoth(z) := 1/2 * ln((1 + z) / (z - 1)) }
+
+  { *************************** Implementation ****************************** }
+
+  IMPLEMENTATION
+
+  VAR ch : CHAR;  // used for error handling
+\end{lstlisting}
+
+\section{Basic conversion and I/O routines}
+
+\begin{lstlisting}[caption=Conversion and I/O routines]
+  FUNCTION ComplexInit(RePart, ImPart: float): ComplexTyp;
+
+  BEGIN
+    Result.RealPart := RePart;
+    Result.ImagPart := ImPart;
+  END;
+
+
+  FUNCTION Re(z: ComplexTyp): float;
+
+  BEGIN
+    Result := z.RealPart;
+  END;
+
+
+  FUNCTION Im(z: ComplexTyp): float;
+
+  BEGIN
+    Result := z.ImagPart;
+  END;
+
+
+  FUNCTION ComplexIsNull(z: ComplexTyp): BOOLEAN;
+
+  BEGIN
+    Result := (Abs(Re(z)) < Zero) AND (Abs(Im(z)) < Zero);
+  END;
+
+
+  FUNCTION ComplexToStr(z: ComplexTyp; m, n: BYTE): STRING;
+    {Komplexe Zahl ausgeben}
+
+  VAR
+    OutStr, ImagStr: STRING;
+    k: INTEGER;
+
+  BEGIN
+    Str(Re(z): m: n, OutStr);
+    WHILE OutStr[1] = ' ' DO
+      Delete(OutStr, 1, 1);
+    IF Im(z) >= 0
+      THEN OutStr := OutStr + '+'
+      ELSE OutStr := OutStr + '-';
+    Str(Abs(Im(z)): m: n, ImagStr);
+    WHILE ImagStr[1] = ' ' DO
+      Delete(ImagStr, 1, 1);
+    OutStr := OutStr + ImagStr + 'i';
+    FOR k := 1 TO (m - Length(OutStr)) DO
+      OutStr := ' ' + OutStr;
+    Result := OutStr;
+  END;
+\end{lstlisting}
+
+The complex conjugate of a complex number \(z = x + \imath y \) is \(z^* = x - \imath y \):
+
+\begin{lstlisting}
+  FUNCTION ComplexConj(z: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(Re(z), -Im(z));
+  END;
+\end{lstlisting}
+
+The absolute value of a complex number is \(|z| = |x + \imath y| = \sqrt{x^2 + y^2} = \sqrt{z \times z^*} \):
+
+\begin{lstlisting}
+  FUNCTION ComplexAbs(z: ComplexTyp): float;
+
+  VAR
+    x: float;
+
+  BEGIN
+    x := (Sqr(Re(z)) + Sqr(Im(z)));
+    IF Abs(x) < Zero
+      THEN Result := 0
+      ELSE Result := Sqrt(x);
+  END;
+\end{lstlisting}
+
+
+\begin{lstlisting}
+  FUNCTION ComplexArg(z: ComplexTyp): float;
+
+  VAR
+    i, r: float;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage(' Complex numbers: Argument of (0 + 0i)');
+          ComplexError := TRUE;
+          EXIT;
+        END;
+    i := Im(z);
+    r := Re(z);
+    IF r = 0
+      THEN Result := Signum(i) * 0.5 * Pi
+      ELSE
+        IF r > 0
+          THEN Result := ArcTan(i / r)
+          ELSE Result := ArcTan(i / r) + Signum(i) * Pi;
+  END;
+\end{lstlisting}
+
+\begin{lstlisting}
+  FUNCTION ComplexInv (z : ComplexTyp) : ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex Numbers: Attempt to invert (0 + 0i) ');
+          ComplexError := TRUE;
+        END
+      ELSE Result := ComplexConj(z) / Sqr(ComplexAbs(z));
+  END;
+\end{lstlisting}
+
+
+\begin{lstlisting}
+  FUNCTION ComplexNeg(z: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(-Re(z), -Im(z));
+  END;
+\end{lstlisting}
+
+
+\begin{lstlisting}
+  PROCEDURE Polar(z: ComplexTyp; VAR r, phi: float);
+
+  BEGIN
+    r := ComplexAbs(z);
+    IF r <> 0
+      THEN IF Abs(Im(z) / r) = 1
+             THEN phi := Pi / 2 * (Im(z) / r) / Abs(Im(z) / r)
+             ELSE phi := ArcTan(Im(z) / Re(z))
+      ELSE
+        BEGIN
+          phi := 0;
+          IF Re(z) < 0
+            THEN
+              IF Im(z) <> 0
+                THEN phi := phi + Pi * Abs(Im(z)) / Im(z)
+                ELSE phi := Pi;
+        END;
+  END;
+\end{lstlisting}
+
+\begin{lstlisting}
+  FUNCTION Rect(r, phi: float): ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(r * Cos(phi), r * Sin(phi));
+  END;
+\end{lstlisting}
+
+
+\section{Basic operators}
+
+\subsection{Operators on complex variables}
+
+In the following routines, we use operator overloading to assign meaning to the operators \( =, :=, +, -, *, /, ** \) for complex arguments \parencite{Can-20}.
+
+Two complex numbers are equal if both their real and imaginary parts are equal:
+\begin{lstlisting}
+  OPERATOR = (z, b: ComplexTyp) : BOOLEAN;
+
+  BEGIN
+    Result := (Re(z) = Re(b)) AND (Im(z) = Im(b));
+  END;
+\end{lstlisting}
+
+Two numbers \(a, b \in \mathbb{C} \) are added \(a + b = x_a + y_a\imath + x_b + y_b \imath = (x_a + x_b) + (y_a + yb)\imath \):
+
+\begin{lstlisting}
+  OPERATOR + (z, b: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(Re(z) + Re(b), Im(z) + Im(b));
+  END;
+\end{lstlisting}
+
+
+Similarly, for subtraction \(a - b = x_a + y_a\imath - x_b + y_b \imath = (x_a - x_b) + (y_a - y_b)\imath \):
+\begin{lstlisting}
+  OPERATOR - (z, b: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(Re(z) - Re(b), Im(z) - Im(b));
+  END;
+\end{lstlisting}
+
+There is also the unary minus:
+\begin{lstlisting}
+  OPERATOR - (z: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(-Re(z), -Im(z));
+  END;
+\end{lstlisting}
+
+
+Multiplication of complex numbers \(a \times\ b = (x_a + y_a\imath) \times\ (x_b + y_b \imath) = (x_a x_b - y_a y_b) + (x_a y_b + x_b y_a)\imath \).
+\begin{lstlisting}
+  OPERATOR * (z, b: ComplexTyp): ComplexTyp;
+
+  VAR
+    r, i: float;
+
+  BEGIN
+    r := Re(z) * Re(b) - Im(z) * Im(b);
+    i := Re(z) * Im(b) + Im(z) * Re(b);
+    Result := ComplexInit(r, i);
+  END;
+\end{lstlisting}
+
+Once the multiplication is defined, we can also define the division of a complex number by a complex number \(a/b = a b^* / |b|^2 \).
+
+\begin{lstlisting}
+  OPERATOR / (z, b: ComplexTyp): ComplexTyp;
+
+  VAR r, i : float;
+
+  BEGIN
+    IF ComplexIsNull(b)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Division by (0 + 0i) ');
+          ComplexError := TRUE;
+          EXIT;
+        END;
+    r := (Re(z) * Re(b) + Im(z) * Im(b)) / (Sqr(Re(b)) + Sqr(Im(b)));
+    i := (Im(z) * Re(b) - Re(z) * Im(b)) / (Sqr(Re(b)) + Sqr(Im(b)));
+    Result := ComplexInit(r, i);
+  END;
+\end{lstlisting}
+
+And finally, we can define a power operator:
+\begin{lstlisting}
+  OPERATOR ** (Basis, Exponent: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(Basis)
+      THEN Result := ComplexInit(0, 0)
+      ELSE Result := ComplexExp(Exponent * ComplexLn(Basis));
+  END;
+\end{lstlisting}
+
+\subsection{Operators on mixed complex and real variables}
+
+Operations which are commutative need to be defined for both the real, complex and the complex, real case.
+
+
+Comparison:
+\begin{lstlisting}
+  OPERATOR = (z: ComplexTyp; x: float) : BOOLEAN;
+
+  BEGIN
+    Result := (Abs(Im(z)) < Zero) AND (Re(z) = x);
+  END;
+
+  OPERATOR = (x: float; z: ComplexTyp) : BOOLEAN;
+
+  BEGIN
+    Result := (Abs(Im(z)) < Zero) AND (Re(z) = x);
+  END;
+\end{lstlisting}
+
+
+
+\begin{lstlisting}
+  OPERATOR := (x: real) : ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(x, 0);
+  END;
+
+
+  OPERATOR := (z: ComplexTyp) : real;
+
+  BEGIN
+    IF Abs(Im(z)) > Zero
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Assignment of complex to real variable: Im(z) <> 0');
+          ComplexError := TRUE;
+        END
+      ELSE
+        Result := Re(z);
+  END;
+\end{lstlisting}
+
+\begin{lstlisting}
+  OPERATOR + (z: ComplexTyp; x: float) : ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(x + Re(z), Im(z));
+  END;
+
+  OPERATOR + (x: float; z: ComplexTyp) : ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(x + Re(z), Im(z));
+  END;
+\end{lstlisting}
+
+\begin{lstlisting}
+  OPERATOR - (z : ComplexTyp; r : real) : ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(Re(z) - r, Im(z));
+  END;
+
+
+  OPERATOR - (r : real; z : ComplexTyp) : ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(r - Re(z), -Im(z));
+  END;
+\end{lstlisting}
+
+We can also define the multiplication of a complex number \(a \) and a real number \(b \) as \(a \times\ b = x_a + y_a\imath \times\ b = x_a b + y_a b \imath \).
+\begin{lstlisting}
+  OPERATOR * (z: ComplexTyp; x: float) : ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(Re(z) * x, Im(z) * x);
+  END;
+
+
+  OPERATOR * (x: float; z: ComplexTyp) : ComplexTyp;
+
+  BEGIN
+    Result := ComplexInit(Re(z) * x, Im(z) * x);
+  END;
+\end{lstlisting}
+
+\begin{lstlisting}
+  OPERATOR / (z: ComplexTyp; x: float): ComplexTyp;
+
+  BEGIN
+    IF x = 0
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to divide by zero');
+          ComplexError := TRUE;
+        END
+      ELSE
+        Result := ComplexInit(Re(z) / x, Im(z) / x);
+  END;
+
+
+  OPERATOR / (x: float; z: ComplexTyp) : ComplexTyp;
+
+  VAR d : float;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Division by (0 + 0i) ');
+          ComplexError := TRUE;
+        END
+      ELSE
+        BEGIN
+          d := Sqr(Re(z)) + Sqr(Im(z));
+          Result := ComplexInit(x*Re(z)/d, -x*Im(z)/d);
+        END;
+  END;
+\end{lstlisting}
+
+\begin{lstlisting}
+  OPERATOR ** (Basis : ComplexTyp; Exponent : float) : ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(Basis)
+      THEN Result := ComplexInit(0, 0)
+      ELSE Result := ComplexExp(ComplexLn(Basis) * Exponent);
+  END;
+
+
+  OPERATOR ** (Basis : float; Exponent : ComplexTyp) : ComplexTyp;
+
+  BEGIN
+    IF Abs(Basis) < Zero
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Complex power of 0');
+          ComplexError := TRUE;
+        END
+      ELSE
+        Result := ComplexExp(Exponent * Ln(Basis));
+  END;
+\end{lstlisting}
+
+
+\section{Logarithms and powers}
+
+\(\exp(x + \imath y) = \exp(x)*\cos(y) + \imath \exp(x)*\sin(y) \). The logarithm of a complex number is \(\ln(z) = \ln(\abs(z)) + i * \arg(z) \)
+
+\begin{lstlisting}[caption=Logarithm and exponential function]
+  FUNCTION ComplexExp(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    i, r: float;
+
+  BEGIN
+    i := Im(z);
+    r := Exp(Re(z));
+    Result := ComplexInit(r * Cos(i), r * Sin(i));
+  END;
+
+
+  FUNCTION ComplexLn(z: ComplexTyp): ComplexTyp;
+
+  VAR r, i: float;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to calculate ln(0+0i) ');
+          ComplexError := TRUE;
+        END
+      ELSE
+        BEGIN
+          r := Ln(ComplexAbs(z));
+          i := ComplexArg(z);
+          Result := ComplexInit(r, i);
+        END;
+  END;
+\end{lstlisting}
+
+A base is raised to the power of an exponent by \(b^e = exp(e \times\ \ln(b)) \). This requires different function depending on whether \(b, z \in \mathbb{R} \) or \(\mathbb{C} \):
+
+\begin{lstlisting}[caption=complex power function]
+  FUNCTION ComplexPower(Basis, Exponent: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(Basis)
+      THEN Result := ComplexInit(0, 0)
+      ELSE Result := ComplexExp(Exponent * ComplexLn(Basis));
+  END;
+
+
+  FUNCTION ComplexPower(Basis: ComplexTyp; Exponent: float): ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(Basis)
+      THEN Result := ComplexInit(0, 0)
+      ELSE Result := ComplexExp(ComplexLn(Basis) * Exponent);
+  END;
+
+
+  FUNCTION ComplexPower(Basis: float; Exponent: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    IF Abs(Basis) < Zero
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Complex power of 0');
+          ComplexError := TRUE;
+        END
+      ELSE
+        Result := ComplexExp(Exponent * Ln(Basis));
+  END;
+\end{lstlisting}
+
+The root of a number is calculated by \(\sqrt[b]{z} = z^{1/b} \). This requires different function depending on whether \(b, z \in \mathbb{R} \) or \(\mathbb{C} \):
+
+\begin{lstlisting}
+  FUNCTION ComplexRoot(z, b: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(b)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to calculate the (0 + 0i)-th root');
+          ComplexError := TRUE;
+          EXIT;
+        END
+      ELSE
+        Result := ComplexPower(z, ComplexInv(b));
+  END;
+
+
+  FUNCTION ComplexRoot(z: ComplexTyp; x: float): ComplexTyp;
+
+  BEGIN
+    IF x = 0
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: 0-th root');
+          ComplexError := TRUE;
+        END
+      ELSE
+        IF ComplexIsNull(z)
+          THEN Result := ComplexInit(0, 0)
+          ELSE Result := ComplexPower(z, 1 / x);
+  END;
+
+
+  FUNCTION ComplexRoot(x: float; z: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: (0 + 0i)-th root');
+          ComplexError := TRUE;
+        END
+      ELSE IF x = 0
+             THEN Result := ComplexInit(0, 0)
+             ELSE Result := ComplexPower(x, ComplexInv(z));
+  END;
+\end{lstlisting}
+
+\section{Angle and cyclometric functions}
+
+ \(sin(x \pm\ \imath y) = \sin(x) \times \cosh(y) \pm \imath \cos(x)  \sinh(y) \):
+
+\begin{lstlisting}
+  FUNCTION ComplexSin(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    r, i: float;
+
+  BEGIN
+    r := Sin(Re(z)) * cosh(Im(z));
+    i := Cos(Re(z)) * sinh(Im(z));
+    Result := ComplexInit(r, i);
+  END;
+\end{lstlisting}
+
+\(\cos(x \pm\ \imath y) = \cos(x) * \cosh(y) \pm\ \imath * \sin(x) * \sinh(y) \):
+
+\begin{lstlisting}
+  FUNCTION ComplexCos(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    r, i: float;
+
+  BEGIN
+    r := Cos(Re(z)) * cosh(Im(z));
+    i := -Sin(Re(z)) * sinh(Im(z));
+    Result := ComplexInit(r, i);
+  END;
+\end{lstlisting}
+
+\(\tan(x \pm\ \imath y) = \frac{\sin(2x)}{\cos(2x) + \cosh(2y)} \pm\ \imath \frac{\sinh(2y)}{\cos(2x) + \cosh(2y)} \):
+
+\begin{lstlisting}
+  FUNCTION ComplexTan(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    r, i: float;
+
+  BEGIN
+    r := Sin(2 * Re(z)) / (Cos(2 * Re(z)) + cosh(2 * Im(z)));
+    i := sinh(2 * Im(z)) / (Cos(2 * Re(z)) + cosh(2 * Im(z)));
+    Result := ComplexInit(r, i);
+  END;
+\end{lstlisting}
+
+\(\cot(z) = \frac{\cos(z)}{\sin(z)} \):
+
+\begin{lstlisting}
+  FUNCTION ComplexCot(z: ComplexTyp): ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to calculate cot(0 + 0i) ');
+          ComplexError := TRUE;
+        END
+      ELSE
+        Result := ComplexCos(z) / ComplexSin(z);
+  END;
+\end{lstlisting}
+
+\( \arcsin(z) = 1/\imath \times \ln(\imath z + \sqrt{1 - z^2}) \):
+
+\begin{lstlisting}
+  FUNCTION ComplexArcSin(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    c0, c1, c2, c3: ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex Numbers: Attempt to calculate arcsin(0 + 0i) ');
+          ComplexError := TRUE;
+          EXIT;
+        END;
+    c1 := ComplexInit(1, 0);
+    c2 := ComplexInit(0, 1);
+    c3 := ComplexInit(0, -1);
+    c0 := ComplexRoot(c1 - ComplexPower(z, 2), 2);
+    c0 := ComplexLn(c2 * z + c0);
+    Result := c3 * c0;
+  END;
+\end{lstlisting}
+
+\(\arccos(z) = 1/\imath \times \ln(z + \sqrt{z^2 - 1}) \):
+
+\begin{lstlisting}
+  FUNCTION ComplexArcCos(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    c0, c1, c2: ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to calculate arccos(0 + 0i) ');
+          ComplexError := TRUE;
+          EXIT;
+        END;
+    c1 := ComplexInit(1.0, 0.0);
+    c2 := ComplexInit(0.0, -1.0);
+    c0 := ComplexRoot(ComplexPower(z, 2) - c1, 2);
+    Result := ComplexLn(z + c0) * c2;
+  END;
+\end{lstlisting}
+
+\( \arctan(z) = \frac{1}{2} \imath \times \ln(\frac{1 + \imath z}{1 - \imath z}) \):
+
+\begin{lstlisting}
+  FUNCTION ComplexArcTan(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    c0, c1, c2, c3, a1, a2: ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to calculate arctan(0 + 0i) ');
+          ComplexError := TRUE;
+          EXIT;
+        END;
+    c1 := ComplexInit(0, 1);
+    c2 := ComplexInit(1, 0);
+    c3 := ComplexInit(0, 2);
+    c0 := c1 * z;
+    a1 := c2 + c0;
+    a2 := c2 - c0;
+    c0 := ComplexLn(a1 / a2);
+    a1 := c2 / c3;
+    Result := a1 * c0;
+  END;
+\end{lstlisting}
+
+\( \mathrm{arccot}(z) = -\frac{1}{2} \imath \times \ln(\frac{1 + \imath z}{\imath z - 1}) \):
+
+\begin{lstlisting}
+  FUNCTION ComplexArcCot(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    c0, c1, c2, c3, a1, a2: ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to calculate arccot(0 + 0i) ');
+          ComplexError := TRUE;
+          EXIT;
+        END;
+    c1 := ComplexInit(0, 1);
+    c2 := ComplexInit(1, 0);
+    c3 := ComplexInit(0, -2);
+    c0 := c1 * z;
+    a1 := c0 + c2;
+    a2 := c0 - c2;
+    c0 := ComplexLn(a1 / a2);
+    a1 := c2 / c3;
+    Result := a1 * c0;
+  END;
+\end{lstlisting}
+
+
+\section{Hyperbolic functions}
+
+\( \sinh(x + \imath y) = \sinh(x) \cos(y) + \imath \cosh(x) \sin(y) = \frac{\exp(z) - \exp(-z)}{2} \):
+
+\begin{lstlisting}
+  FUNCTION ComplexSinh(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    r, i: float;
+
+  BEGIN
+    r := sinh(Re(z)) * Cos(Im(z));
+    i := cosh(Re(z)) * Sin(Im(z));
+    Result := ComplexInit(r, i);
+  END;
+\end{lstlisting}
+
+\( \cosh(x + \imath y) = \cosh(x) \cos(y) \pm\ \imath \sinh(x) \sin(y)  = \frac{\exp(z) + \exp(-z)}{2} \):
+
+\begin{lstlisting}
+  FUNCTION ComplexCosh(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    r, i: float;
+
+  BEGIN
+    r := cosh(Re(z)) * Cos(Im(z));
+    i := sinh(Re(z)) * Sin(Im(z));
+    Result := ComplexInit(r, i);
+  END;
+\end{lstlisting}
+
+\( \tanh(x + \imath y) = (\sinh(2 x)/(\cosh(2 x) + \cos(2 y)) + \imath (\sin(2 y)/(\cosh(2 x) + \cos(2 y)))  = \frac{\exp(z) - \exp(-z)}{\exp(z) + \exp(-z)} \):
+
+\begin{lstlisting}
+  FUNCTION ComplexTanh(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    r, i: float;
+
+  BEGIN
+    r := sinh(2 * Re(z)) / (cosh(2 * Re(z)) + Cos(2 * Im(z)));
+    i := Sin(2 * Im(z)) / (cosh(2 * Re(z)) + Cos(2 * Im(z)));
+    Result := ComplexInit(r, i);
+  END;
+\end{lstlisting}
+
+\( \coth(z) = \frac{\cosh(z)}{\sinh(z)} \):
+
+\begin{lstlisting}
+  FUNCTION ComplexCoth (z : ComplexTyp) : ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to calculate coth(0 + 0i) ');
+          ComplexError := TRUE;
+        END
+      ELSE
+        Result := ComplexCosh(z) / ComplexSinh(z);
+  END;
+\end{lstlisting}
+
+\section{Area functions}
+
+\( \mathrm{arsinh}(z) = \ln(z + \sqrt{z^2 + 1}) \):
+
+\begin{lstlisting}
+  FUNCTION ComplexArSinh(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    c0, c1: ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to calculate arsinh(0 + 0i) ');
+          ComplexError := TRUE;
+        END
+      ELSE
+        BEGIN
+          c1 := ComplexInit(1, 0);
+          c0 := ComplexRoot(ComplexPower(z, 2) + c1, 2);
+          Result := ComplexLn(z + c0);
+        END;
+  END;
+\end{lstlisting}
+
+\( \mathrm{arcosh}(z) = \ln(z + \sqrt{z^2 - 1}) \):
+
+\begin{lstlisting}
+  FUNCTION ComplexArCosh(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    c0, c1: ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to calculate arcosh(0 + 0i) ');
+          ComplexError := TRUE;
+        END
+      ELSE
+        BEGIN
+          c1 := ComplexInit(1, 0);
+          c0 := ComplexRoot(ComplexPower(z, 2) - c1, 2);
+          Result := ComplexLn(z + c0);
+        END;
+  END;
+\end{lstlisting}
+
+\( \mathrm{artanh}(z) := -\frac{1}{2} * \ln(\frac{1 + z}{1 - z}) \):
+
+\begin{lstlisting}
+  FUNCTION ComplexArTanh(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    c0, c1, c2, a1, a2: ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+          ch := WriteErrorMessage('Complex numbers: Attempt to calculate artanh(0 + 0i) ');
+          ComplexError := TRUE;
+        END
+      ELSE
+        BEGIN
+          c1 := ComplexInit(1, 0);
+          c2 := ComplexInit(2, 0);
+          a1 := c1 + z;
+          a2 := c1 - z;
+          c0 := ComplexLn(a1 / a2);
+          Result := c0 / c2;
+        END;
+  END;
+\end{lstlisting}
+
+\( \mathrm{arcoth}(z) := \frac{1}{2} * \ln(\frac{1 + z}{z - 1}) \):
+
+\begin{lstlisting}
+  FUNCTION ComplexArCoth(z: ComplexTyp): ComplexTyp;
+
+  VAR
+    c0, c1, c2, a1, a2: ComplexTyp;
+
+  BEGIN
+    IF ComplexIsNull(z)
+      THEN
+        BEGIN
+         ch := WriteErrorMessage('Complex numbers: Attempt to calculate arcoth(0 + 0i) ');
+         ComplexError := TRUE;
+        END
+      ELSE
+        BEGIN
+          c1 := ComplexInit(1, 0);
+          c2 := ComplexInit(2, 0);
+          a1 := z + c1;
+          a2 := z - c1;
+          c0 := ComplexLn(a1 / a2);
+          Result := c0 / c2;
+        END;
+  END;
+
+  END. // UNIT Complex
+\end{lstlisting}
+
+\section{Test program}
+
+A simple test program can be used to identify problems. It is based on applying the reciprocal function to the result of a function, this should return the original argument:
+
+\begin{lstlisting}
+  PROGRAM TestComplex;
+
+  USES Mathfunc, Complex;
+
+  VAR a, b, c, d : ComplexTyp;
+      x, y, z    : double;
+
+
+  PROCEDURE EinOperand(a, r : ComplexTyp; Operation : STRING);
+
+  BEGIN
+    Write(Operation,'(');
+    Write(ComplexToStr(a, 6, 3));
+    Write(') = ');
+    Write(ComplexToStr(r, 6, 3));
+    Writeln;
+  END;
+
+
+  PROCEDURE ZweiOperanden (a1, a2, r : ComplexTyp; Operation : STRING);
+
+  BEGIN
+    Write('(');
+    Write(ComplexToStr(a1, 6, 3));
+    Write(') ', Operation, ' (');
+    Write(ComplexToStr(a2, 6, 3));
+    Write(') = (');
+    Write(ComplexToStr(r, 6, 3));
+    Writeln(')');
+  END;
+
+
+  PROCEDURE ComplexMitReel (a1, r : ComplexTyp; a2 : double; Operation : STRING);
+
+  BEGIN
+    Write('(');
+    Write(ComplexToStr(a1, 6, 3));
+    Write(') ', Operation, ' ', a2:6:3);
+    Write(' = (');
+    Write(ComplexToStr(r, 6, 3));
+    Writeln(')');
+  END;
+
+
+  PROCEDURE TestAddSub;
+
+  BEGIN
+    c := a + b;
+    ZweiOperanden(a, b, c, '+');
+    d := c - b;
+    ZweiOperanden(c, b, d, '-');
+  END;
+
+
+  PROCEDURE TestMulDiv;
+
+  BEGIN
+    c := a * b;
+    ZweiOperanden(a, b, c, '*');
+    d := c / b;
+    IF ComplexError
+      THEN ComplexError := FALSE
+      ELSE ZweiOperanden(c, b, d, '/');
+  END;
+
+
+  PROCEDURE TestMulDivMitReel;
+
+  BEGIN
+    b := a * x;
+    ComplexMitReel(a, b, x, '*');
+    c := b / x;
+    IF ComplexError
+      THEN ComplexError := FALSE
+      ELSE ComplexMitReel(b, c, x, '/');
+  END;
+
+
+  PROCEDURE TestPolarRect;
+
+  BEGIN
+    Polar(a, y, z);
+    c := Rect(y, z);
+    Write('Polar(');
+    Write(ComplexToStr(a, 6, 3));
+    Writeln(') = (', y:6:3, ', ', z:6:3, ')');
+    Write('Rect(', y:6:3, ', ', z:6:3, ') = (');
+    Write(ComplexToStr(c, 6, 3));
+    Writeln(')');
+  END;
+
+
+  PROCEDURE TestExpLn;
+
+  BEGIN
+    b := ComplexExp(a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(a, b, 'exp');
+    c := ComplexLn(b);
+    IF ComplexError
+      THEN ComplexError := FALSE
+      ELSE EinOperand(b, c, 'ln');
+  END;
+
+
+  PROCEDURE TestPotReelComplex;
+
+  BEGIN
+    b := ComplexPower(x, a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    Write(x:6:3, '^(');
+    Write(ComplexToStr(a, 6, 3));
+    Write(') = ');
+    Write(ComplexToStr(b, 6, 3));
+    Writeln;
+    c := ComplexRoot(b, a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    Write('(');
+    Write(ComplexToStr(b, 6, 3));
+    Write(')^1/(');
+    Write(ComplexToStr(a, 6, 3));
+    Write(') = ');
+    Write(ComplexToStr(c, 6, 3));
+    Writeln;
+  END;
+
+
+  PROCEDURE TestPotComplexReel;
+
+  BEGIN
+    b := ComplexPower(a, x);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    ComplexMitReel(a, b, x, '^');
+    c := ComplexRoot(b, x);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    ComplexMitReel(b, c, x, '^1/');
+  END;
+
+
+  PROCEDURE TestPotComplexComplex;
+
+  BEGIN
+    c := ComplexPower(a, b);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    ZweiOperanden(a, b, c, '^');
+    d := ComplexRoot(c, b);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    ZweiOperanden(c, b, d, '^1/');
+  END;
+
+
+  PROCEDURE TestSin;
+
+  BEGIN
+    b := ComplexSin(a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(a, b, 'sin');
+    c := ComplexArcSin(b);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(b, c, 'arcsin');
+  END;
+
+
+  PROCEDURE TestCos;
+
+  BEGIN
+    b := ComplexCos(a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(a, b, 'cos');
+    c := ComplexArcCos(b);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(b, c, 'arccos');
+  END;
+
+
+  PROCEDURE TestTan;
+
+  BEGIN
+    b := ComplexTan(a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(a, b, 'tan');
+    c := ComplexArcTan(b);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(b, c, 'arctan');
+  END;
+
+
+  PROCEDURE TestCot;
+
+  BEGIN
+    b := ComplexCot(a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(a, b, 'cot');
+    c := ComplexArcCot(b);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(b, c, 'arctan');
+  END;
+
+
+  PROCEDURE TestSinh;
+
+  BEGIN
+    b := ComplexSinh(a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(a, b, 'sinh');
+    c := ComplexArSinh(b);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(b, c, 'arsinh');
+  END;
+
+
+  PROCEDURE TestCosh;
+
+  BEGIN
+    b := ComplexCosh(a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(a, b, 'cosh');
+    c := ComplexArCosh(b);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(b, c, 'arcosh');
+  END;
+
+
+  PROCEDURE TestTanh;
+
+  BEGIN
+    b := ComplexTanh(a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(a, b, 'tanh');
+    c := ComplexArTanh(b);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+         END;
+    EinOperand(b, c, 'artanh');
+  END;
+
+
+  PROCEDURE TestCoth;
+
+  BEGIN
+    b := ComplexCoth(a);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(a, b, 'coth');
+    c := ComplexArCoth(b);
+    IF ComplexError
+      THEN
+        BEGIN
+          ComplexError := FALSE;
+          EXIT;
+        END;
+    EinOperand(b, c, 'arcoth');
+  END;
+
+
+  PROCEDURE TestAll;
+
+  VAR c : ComplexTyp;
+
+  BEGIN
+    TestAddSub; Writeln;
+    TestMulDiv; Writeln;
+    TestMulDivMitReel; Writeln;
+    TestPolarRect; Writeln;
+    TestExpLn; Writeln;
+    TestPotReelComplex; Writeln;
+    TestPotComplexReel; Writeln;
+    TestPotComplexComplex; Writeln;
+    TestSin; Writeln;
+    TestCos; Writeln;
+    TestTan; Writeln;
+    TestCot; Writeln;
+    TestSinh; Writeln;
+    TestCosh; Writeln;
+    TestTanh; Writeln;
+    TestCoth; Writeln;
+    ReadLn;
+  END;
+
+
+  BEGIN
+    a := ComplexInit(0.621, 0.567);
+    b := ComplexInit(0.5, 0.4);
+    x := 1.5;
+    TestAll;
+    a := ComplexInit(1.0, -1.0);
+    x := 0.2;
+    TestAll;
+    a := ComplexInit(-0.5, 0.2);
+    x := 0.2;
+    TestAll;
+    a := ComplexInit(-1.0, -1.5);
+    x := 1.5;
+    TestAll;
+    a := ComplexInit(1.0, 0.0);
+    x := 1.5;
+    TestAll;
+    a := ComplexInit(0.0, 1.0);
+    x := 1.5;
+    TestAll;
+    a := ComplexInit(0.0, 0.0);
+    x := 1.5;
+    TestAll;
+  END.
+\end{lstlisting}
+
+
+% Problem case
+% (-1.0 - 1.5i)^1.5 = (-2.409 + 0.233i)
+% (-2.409 + 0.233i)^1/1.5 = (-0.799 + 1.616i)
+%
+% (-1.0 - 1.5i)^(-2.409 + 0.233i) = (0.235 - 0.324i)
+% (0.235 - 0.324i)^1/(-2.409 + 0.233i) = (1.279 + 0.579i)
+
+\printbibliography[heading=subbibliography]
+\end{refsection}
+

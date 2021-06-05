@@ -1,0 +1,217 @@
+\chapter{Big sets}
+\begin{refsection}
+
+\abstract{The set data type in pascal is limited to \texttt{MaxByte} (\num{255}) members. In some applications, this is insufficient. This unit defines a set type with arbitrary size and the operations that can be performed on it.}
+
+A set is, in effect, an \texttt{array [0..pred(MaxCardinality)] of bit}. Each bit stands for one member, and is 1 if that member is in the set and 0 if it is not. However, there is no data type bit in Pascal, so we implement the array as an \texttt{array of word}. \texttt{MaxCardinality} should be a multiple of the \texttt{WordSize}, which is \SI{2}{byte} = \SI{16}{bit} under Lazarus for Windows. Thus, for our purposes, it is reasonable to set \texttt{MaxCardinality} = \num{2048}. Then we only need to define routines that allow access to individual bits. The interface of such a unit would be:
+\begin{lstlisting}[caption=Interface]
+  UNIT BigSet;
+
+  INTERFACE
+
+  USES Classes;
+
+  CONST MaxCardinality = 2048;                                       // change AS needed
+        WordSize       = SizeOf(WORD) * 8;                           // IN bits
+        MaxMembers     = Pred(MaxCardinality DIV (WordSize));        // number OF words needed TO fit elements
+
+  TYPE SetType = ARRAY [0..MaxMembers] OF WORD;
+
+  PROCEDURE SetBit (VAR S : SetType; Bit : WORD);
+
+  PROCEDURE ClearBit (VAR S : SetType; Bit : WORD);
+
+  PROCEDURE ToggleBit (VAR S : SetType; Bit : WORD);
+
+  PROCEDURE ClearAllBits (VAR S : SetType);
+
+  PROCEDURE SetAllBits (VAR S : SetType);
+
+  FUNCTION InSet (CONST S : SetType; Bit : WORD) : BOOLEAN;
+
+  PROCEDURE SetUnion (VAR S: SetType; CONST T, U : SetType);
+
+  PROCEDURE SetIntersection (VAR S: SetType; CONST T, U : SetType);
+
+  PROCEDURE SetComplement (VAR S: SetType; CONST T, U : SetType);
+
+  PROCEDURE SetSymDifference (VAR S: SetType; CONST T, U : SetType);
+
+  FUNCTION SubSet (CONST S, T : SetType) : BOOLEAN;
+
+  FUNCTION TrueSubSet (CONST S, T : SetType) : BOOLEAN;
+
+  FUNCTION EqualSet (CONST S, T : SetType) : BOOLEAN;
+
+  FUNCTION EmptySet (CONST S : SetType) : BOOLEAN;
+
+FUNCTION Cardinality (CONST S : SetType) : WORD;
+\end{lstlisting}
+
+\begin{lstlisting}[caption=Implementation]
+  IMPLEMENTATION
+
+  CONST Bits : ARRAY [0..15] OF WORD = (   1,    2,    4,    8,   16,   32,    64,   128,
+                                         256,  512, 1024, 2048, 4096, 8192, 16384, 32768);
+
+  PROCEDURE SetBit(VAR S : SetType; Bit : WORD);
+
+  VAR n : WORD;
+
+  BEGIN
+    n := Bit DIV WordSize;         // identify the WORD that stores the bit
+    S[n] := S[n] OR Bits[Bit MOD 16];
+  END;
+
+
+  PROCEDURE ClearBit (VAR S : SetType; Bit : WORD);
+
+  VAR n : WORD;
+
+  BEGIN
+    n := Bit DIV WordSize;
+    S[n] := S[n] AND NOT Bits[Bit MOD 16];
+  END;
+
+
+  PROCEDURE ToggleBit (VAR S : SetType; Bit : WORD);
+
+  VAR n : WORD;
+
+  BEGIN
+    n := Bit DIV WordSize;
+    S[n] := S[n] XOR Bits[Bit MOD 16];
+  END;
+
+
+  FUNCTION InSet (CONST S : SetType; Bit : WORD) : BOOLEAN;
+
+  VAR n : WORD;
+
+  BEGIN
+    n := Bit DIV WordSize;
+    Result := S[n] AND Bits[Bit MOD 16] <> 0;
+  END;
+
+  PROCEDURE ClearAllBits (VAR S : SetType);
+
+  VAR n : WORD;
+
+  BEGIN
+    FOR n := 0 TO MaxMembers DO
+      S[n] := 0;
+  END;
+
+  PROCEDURE SetAllBits (VAR S : SetType);
+
+  VAR n : WORD;
+
+  BEGIN
+    FOR n := 0 TO MaxMembers DO
+      S[n] := Pred(MaxCardinality);
+  END;
+
+  PROCEDURE SetUnion (VAR S: SetType; CONST T, U : SetType);
+
+  VAR n : WORD;
+  BEGIN
+    FOR n := 0 TO Pred(MaxCardinality) DO
+      IF (InSet(T, n) OR InSet(U, n))
+        THEN SetBit(S, n)
+        ELSE ClearBit(S, n);
+  END;
+
+  PROCEDURE SetIntersection (VAR S: SetType; CONST T, U : SetType);
+
+  VAR n : WORD;
+  BEGIN
+    FOR n := 0 TO Pred(MaxCardinality) DO
+      IF (InSet(T, n) AND InSet(U, n))
+        THEN SetBit(S, n)
+        ELSE ClearBit(S, n);
+  END;
+
+  PROCEDURE SetComplement (VAR S: SetType; CONST T, U : SetType);
+
+  VAR n : WORD;
+  BEGIN
+    FOR n := 0 TO Pred(MaxCardinality) DO
+      IF (InSet(T, n) AND NOT(InSet(U, n)))
+        THEN SetBit(S, n)
+        ELSE ClearBit(S, n);
+  END;
+
+  PROCEDURE SetSymDifference (VAR S: SetType; CONST T, U : SetType);
+
+  VAR H1, H2 : SetType;
+
+  BEGIN
+    SetComplement(H1, T, U);
+    SetComplement(H2, U, T);
+    SetUnion(S, H1, H2)
+  END;
+
+  FUNCTION SubSet (CONST S, T : SetType) : BOOLEAN;
+
+  VAR n : WORD;
+  BEGIN
+    FOR n := 0 TO Pred(MaxCardinality) DO
+      IF (InSet(S, n) AND NOT InSet(T, n))  // found one member OF S that IS NOT IN T?
+        THEN
+          BEGIN
+            SubSet := FALSE;
+            EXIT;
+          END;
+    Result := TRUE;  // IF none found
+  END;
+
+  FUNCTION EqualSet (CONST S, T : SetType) : BOOLEAN;
+
+  VAR n : WORD;
+  BEGIN
+    FOR n := 0 TO Pred(MaxCardinality) DO
+      IF (InSet(S, n) <> InSet(T, n))  // found one inequality?
+        THEN
+          BEGIN
+            Result := FALSE;
+            EXIT;
+          END;
+    Result := TRUE;
+  END;
+
+  FUNCTION TrueSubSet (CONST S, T : SetType) : BOOLEAN;
+
+  BEGIN
+    Result := Subset(S, T) AND NOT EqualSet(S, T);
+  END;
+
+  FUNCTION EmptySet (CONST S : SetType) : BOOLEAN;
+
+  VAR n : WORD;
+  BEGIN
+    FOR n := 0 TO Pred(MaxCardinality) DO
+      IF InSet(S, n)  // found one member?
+        THEN
+          BEGIN
+            Result := FALSE;
+            EXIT;
+          END;
+    Result := TRUE;
+  END;
+
+  FUNCTION Cardinality (CONST S : SetType) : WORD;
+
+  VAR n, c : WORD;
+  BEGIN
+    c := 0;
+    FOR n := 0 TO Pred(MaxCardinality) DO
+      IF InSet(S, n) THEN INC(c);   // count members
+    Result := c;
+  END;
+
+  END.
+\end{lstlisting}
+
+\printbibliography[heading=subbibliography]
+\end{refsection}
+

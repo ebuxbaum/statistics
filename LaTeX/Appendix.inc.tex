@@ -1,0 +1,67 @@
+% -*- TeX:UK -*-
+\appendix
+\chapter{Symbols and abbreviations}
+
+\section{Symbols used}
+
+\begin{tabular}{cccp{130mm}}
+  \toprule
+  \skalar{n}        &                   &                 & number of cases \\
+  \skalar{p}        &                   &                 & number of variables \\
+  \skalar{q}        &                   &                 & number of extracted (significant) eigenvalues/-vectors \\
+  \skalar{r}        &                   &                 & rows of a contingency table \\
+  \skalar{c}        &                   &                 & columns of a contingency table \\
+ \(\psi \)          &                   &                 & error term  \\
+ \(\omega \)        &                   &                 & weight of form matrix during shrinkage \\
+ \(\nu\)            &                   &                 & degrees of freedom \\
+  \arr{A}           & \AbsVec{a}        & \(p\times q \)  & transformation matrix to calculate \arr{C} from \arr{L} \\
+  \arr{B}           & \AbsVec{b}        & \(p\times q \)  & rotated factor matrix \\
+  \arr{C}           & \AbsVec{c}        & \(n\times q \)  & factor scores (\( \arr{C} = \arr{X}_{n \times p} \arr{F}_{p \times q} \) ) \\
+  \arr{E}           & \AbsVec{e}        & \(p\times p \)  & eigenvectors in columns, all eigenvector have unit length  \\
+  \arr{F}           & \AbsVec{f}        & \(p\times q \)  & projection matrix, \skalar{q} most significant eigenvectors \\
+  \arr{G}           & \AbsVec{g}        & \(q\times q \)  & gradient matrix (during rotation) \\
+  \arr{H}           & \AbsVec{h}        & \(n\times n \)  & hat-matrix \\
+  \arr{I}           & \AbsVec{i}        &                 & identity matrix (diagonal 1, all other elements 0) \\
+  \arr{L}           & \AbsVec{l}        & \(p\times q \)  & factor loadings, correlations between variables and factors \\
+  \arr{R}           & \skalar{r}        & \(p\times p \)  & correlation matrix \\
+  \arr{S}           & \AbsVec{s}        & \(p\times p \)  & variance-covariance matrix \(\arr{S} = \arr{X}^T \arr{X} / (p-1) \) \\
+  \arr{T}           & \AbsVec{t}        & \(r\times c \)  & contingency table \\
+  \arr{U}           & \AbsVec{u}        & \(p\times p \)  & diagonal matrix of uniqueness \\
+  \arr{X}           & \AbsVec{x}        & \(n\times p \)  & original data \\
+  \arr{Z}           & \AbsVec{z}        & \(n\times p \)  & \skalar{z}-transformed data \\
+ \(\Theta \)        & \(\theta \)       & \(q\times q \)  & rotation matrix \\
+  \skalar{r}        & \skalar{r}        & \(r \)          & row sums of a contingency table \\
+  \AbsVec{C}        & \AbsVec{c}        & \(c \)          & column sums of a contingency table \\
+  \AbsVec{\Lambda}  & \AbsVec{\lambda}  & \(p\times p \)  & diagonal matrix of eigenvalues  \\
+  \AbsVec{H}        & \AbsVec{h}        & \( p \)         & communalities, sum of squared factor loadings for each variable  \\
+  \bottomrule
+\end{tabular}
+
+\section{Abbreviations}
+
+\begin{acronym}
+   \acro{AIC}{\Name{Akaike} information criterion}
+   \acro{BIC}{\Name{Bayes}ian information criterion}
+   \acro{CPM}[CP/M]{control program for microcomputers}, outdated 8 bit operating system
+   \acro{ESS}{explained sum of squares}, \( \sum_{i=1}^n{(\hat{\AbsVec{y}}_i - \bar{\AbsVec{y}})^2} \)
+   \acro{FA}{factor analysis}
+   \acro{knn}{\skalar{k}-nearest neighbours}
+   \acro{LOOCV}{Leave-One-Out Cross-Validation}
+   \acro{MAD}{median absolute deviation from the median}, robust measure of scale in symmetrical distributions
+   \acro{MAR}{missing at random}
+   \acro{MCAR}{missing completely at random}
+   \acro{MCD}{minimum covariance determinant}, robust estimator of location and scatter
+   \acro{MNAR}{missing not at random}
+   \acro{MSE}{mean squared error}, \( \frac{1}{n} \mathrm{RSS} \)
+   \acro{NaN}{not a number}, 80x87 representation of illegal or missing data
+   \acro{OTU}{operational taxonomic unit}, cases in cluster analysis
+   \acro{PAM}{Partitioning around medoids}, clustering method
+   \acro{PCA}{principle component analysis}
+   \acro{PRE}{proportionate reduction of error}, basis of several correlation coefficients
+   \acro{RSS}{residual sum of squares}, \( \sum_{i=1}^n{(y_i - \hat{y}_i)^2} \)
+   \acro{RSE}{residual standard error}, \( \sqrt{\frac{\mathrm{RSS}}{n-p-1}} \)
+   \acro{TSS}{total sum of squares}, \( \sum_{i=1}^n{(y_i - \bar{y})^2} \)
+   \acro{UPGMA}{unweighted pair group method with arithmetic mean}, clustering method
+   \acro{US}{United States [of America]}
+\end{acronym}
+

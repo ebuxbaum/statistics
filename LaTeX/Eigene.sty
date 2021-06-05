@@ -1,0 +1,350 @@
+% Private XeLaTeX style for scientific texts
+% copyright 2019 by Dr Engelbert Buxbaum <engelbert_buxbaum@web.de>
+% This file may be shared under Gnu copyleft.
+
+\ProvidesPackage{Eigene}[2019/09/18 v1.01 standard packages for scientific texts]
+\NeedsTeXFormat{LaTeX2e}
+
+\RequirePackage[frenchstyle]{kpfonts}%Johannes-Kepler font
+
+\RequirePackage{acronym}%keep track of acronyms
+\RequirePackage{amssymb}%math symbols
+\RequirePackage{babel}%foreign language support
+\RequirePackage[backend=biber,bibencoding=UTF8,sorting=none,style=numeric-comp]{biblatex}%bibliography
+\RequirePackage{css-colors}% web-safe colours
+\RequirePackage{booktabs}%proper rules in tables
+\RequirePackage{chemarrow}%arrows in chemical reactions
+\RequirePackage{xcolor}%handle colours
+\RequirePackage{colortbl}%coloured background for tables
+\RequirePackage{csquotes}%context-sensitive quotes, required for biblatex
+\RequirePackage{doi}%give DOIs as hyperlinks in bibliography
+\RequirePackage{floatrow}%control float placement
+\RequirePackage{fontspec}% font selecting commands
+\RequirePackage{graphicx}%inclusion of images
+\RequirePackage{hypcap} % anchors of captions
+\RequirePackage{isodate}%use international format for date and time
+\RequirePackage{isotope}%correct typesetting of isotopes
+\RequirePackage{letltxmacro}% change LaTeX commands with optional arguments
+\RequirePackage{listings}%typeset computer code
+\RequirePackage{makeidx}%index generation
+\RequirePackage{marvosym}%various symbols
+\RequirePackage{mathbbol}%blackboard bold symbols (double line left)
+\RequirePackage{mathtools}%extension of amsmath
+\RequirePackage{media9}%include video or sound, currently doesn't work because flash-based
+\RequirePackage{microtype}%micro-typesetting
+\RequirePackage{multicol}%switching between one- and multicolumn
+%\RequirePackage{pdfcomment}% use pdf annotations
+\RequirePackage{placeins}%allows FloatBarriers to be set
+\RequirePackage{rotating}%rotate objects} sidewaystables/figures
+\RequirePackage{siunitx}%correct typesetting of units
+\RequirePackage[labelformat=empty,labelsep=none]{subfig}% several entries in one float
+\RequirePackage{supertabular}%tables over several pages
+\RequirePackage[breakable,skins,listings]{tcolorbox}%put text into coloured boxes
+\RequirePackage[euler]{textgreek}%upright greek characters
+\RequirePackage{ulem}%underlining and striking out
+\RequirePackage{url}%typeset internet links (preloaded in beamer)
+\RequirePackage{wasysym}
+
+\RequirePackage{hyperref}%hyperrefs in PDF, must be last package called, preloaded in beamer
+\hypersetup{final=true,
+            pdfauthor={Dr. Engelbert Buxbaum},
+            colorlinks=true,
+            citecolor=Blue,%bibliography, dark blue
+            linkcolor=Blue,%internal links, dark blue
+            urlcolor=DodgerBlue,%internet, middle blue
+            allbordercolors=White}
+
+\newcommand{\EURO}{{\footnotesize{\EUR}}} % because \EUR is way too big
+
+% special chars in listings environment under XeTeX
+\lstset{literate=%
+    {Ö}{{\"O}}1
+    {Ä}{{\"A}}1
+    {Ü}{{\"U}}1
+    {ß}{{\ss}}1
+    {ü}{{\"u}}1
+    {ä}{{\"a}}1
+    {ö}{{\"o}}1
+    {~}{{\textasciitilde}}1
+    }
+
+\newcommand{\Name}[1]{\textnormal{\textsc{#1}}}    % proper names
+\newcommand{\Foreign}[1]{\textnormal{\textit{#1}}} % words from foreign languages
+\newcommand{\Species}[1]{\textnormal{\textit{#1}}} % biological species
+
+% Fonts for math-entities
+\newcommand{\skalar}[1]{\ensuremath{#1}}
+\newcommand{\Vector}[1]{\ensuremath{\vec{\mathfrak{#1}}}}
+\newcommand{\AbsVec}[1]{\ensuremath{\mathfrak{#1}}}
+\newcommand{\arr}[1]{\ensuremath{\mathcal{#1}}}
+\newcommand{\tensor}[1]{\textsf{\bfseries{#1}}}
+\newcommand{\set}[1]{\ensuremath{\mathbb{#1}}}
+
+% move super- and subscripts to make them more readable
+\makeatletter
+  \frozen@everymath={\check@mathfonts
+    \fontdimen16 \textfont2=\fontdimen17 \textfont2
+    \the\everymath}
+  \frozen@everydisplay={\check@mathfonts
+    \fontdimen16 \textfont2=\fontdimen17 \textfont2
+    \the\everymath}
+\makeatother
+
+%% "closed" sqrt sign, https://tex.stackexchange.com/questions/29834/closed-square-root-symbol
+\makeatletter
+\let\oldr@@t\r@@t
+\def\r@@t#1#2{%
+\setbox0=\hbox{$\oldr@@t#1{#2\,}$}\dimen0=\ht0
+\advance\dimen0-0.2\ht0
+\setbox2=\hbox{\vrule height\ht0 depth -\dimen0}%
+{\box0\lower0.4pt\box2}}
+\LetLtxMacro{\oldsqrt}{\sqrt}
+\renewcommand*{\sqrt}[2][\ ]{\oldsqrt[#1]{#2}}
+\makeatother
+
+
+\DeclareMathOperator{\logit}{logit}
+\DeclareMathOperator{\sgn}{sgn}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\var}{var}
+\DeclareMathOperator{\cov}{Cov}
+\DeclareMathOperator{\trace}{tr}
+\DeclareMathOperator{\abs}{abs}
+\DeclareMathOperator{\rk}{rk}
+\DeclareMathOperator{\svd}{svd}
+\DeclareMathOperator{\median}{median}
+\DeclareMathOperator{\dist}{dist}
+\DeclareMathOperator{\ld}{ld}
+\DeclareMathOperator{\modulo}{modulo}
+
+% physicochemical entities
+\newcommand{\ph}{\Foreign{p}H}
+\newcommand{\poh}{\Foreign{p}OH}
+\newcommand{\pka}{\Foreign{p}K\textsubscript{a}}
+\newcommand{\pkb}{\Foreign{p}K\textsubscript{b}}
+\newcommand{\pkw}{\Foreign{p}K\textsubscript{w}}
+\newcommand{\pkr}{\Foreign{p}K\textsubscript{r}}
+\newcommand{\pI}{\Foreign{p}I}
+
+% Chemical formulas in text
+\makeatletter
+ \DeclareRobustCommand{\single}{\raisebox{0.25ex}{$\m@th-$}}
+ \DeclareRobustCommand{\dotted}{\raisebox{0.6ex}{$\m@th.. $}}
+ \DeclareRobustCommand{\Lewis}{\raisebox{0.6ex}{$\m@th.$}}
+ \DeclareRobustCommand{\double}{\raisebox{0.25ex}{$\m@th=$}}
+ \DeclareRobustCommand{\triple}{\raisebox{0.25ex}{$\m@th\equiv$}}
+ \DeclareRobustCommand*{\Doth}{\LARGE{.}}
+ \DeclareRobustCommand{\radic}{\hspace{-0.1em}{\raisebox{1.4ex}{\Doth}}}
+ \DeclareRobustCommand{\chemical}[1]{%
+    {\(\m@th
+     \edef\resetfontdimens{\noexpand\)%
+         \fontdimen16 \textfont2=\the\fontdimen16 \textfont2
+         \fontdimen17 \textfont2=\the\fontdimen17 \textfont2 \relax}%
+     \fontdimen16 \textfont2=2.7pt \fontdimen17 \textfont2=2.7pt
+     \mathsf{#1}%
+     \resetfontdimens}}
+\makeatother
+\renewcommand{\isotopestyle}{\mathsf}% if package isotope is used
+
+% use academic colours: philosophers blue, physicians green, lawers red, theologists black
+\newtcolorbox{advanced}[1]{colback=blue!5!white,colframe=blue!75!black,fonttitle=\bfseries,title=#1,breakable}
+\newtcolorbox{medical}{colback=green!5!white,colframe=green!75!black,breakable}
+\newtcolorbox{medtitle}[1]{colback=green!5!white,colframe=green!75!black,fonttitle=\bfseries,title=#1,breakable}
+\newtcolorbox{rules}{colback=red!5!white,colframe=red!75!black,breakable}
+
+\lstloadlanguages{[Borland6]Pascal,R,[x86masm]assembler}
+\lstset{backgroundcolor=\color{Cornsilk},
+        language=[Borland6]Pascal,
+        alsolanguage=[x86masm]assembler,
+        extendedchars=false,                 % chars 128-255 not printed
+        breaklines=true,                     % long lines broken
+        breakatwhitespace=true,              % ... but only at whitespace
+        numbers=left, numberstyle=\tiny, stepnumber=1, numbersep=0pt,
+        basicstyle=\ttfamily\small\color{black}, % print listing small monospaced
+        keywordstyle=\bfseries,
+        identifierstyle=\color{DarkRed},     %
+        morecomment=[l]{//},                 % allow inline comments from Object Pascal
+        commentstyle=\color{Blue},
+        stringstyle=\color{DodgerBlue},
+        showstringspaces=false               % no special string spaces
+       }
+\defaultfontfeatures{Scale=MatchLowercase}
+\setmonofont{Fantasque Sans Mono}            % 0O, 1Il -~ clearly distinguished, Jany Belluz <jany.belluz@hotmail.fr>
+
+\floatsetup[table]{style=plaintop}
+\setlength{\rotFPtop}{10pt plus 1fil} % quick fix for sidewaysfigures appearing to high, so that caption is cropped
+
+% definitions for biblatex     http://www.khirevich.com/latex/biblatex/, https://3d.bk.tudelft.nl/hledoux/blog/fiddling-biblatex/, moewe94@live.de on comp.text.tex
+
+\DeclareNameAlias{sortname}{last-first}
+
+\renewcommand{\multinamedelim}{\addcomma\space}
+\renewcommand{\finalnamedelim}{\addcomma\space}
+
+\renewbibmacro*{byeditor+others}{%
+  \ifnameundef{editor}
+    {}
+    {\printnames[byeditor]{editor}%
+     \setunit{\addspace}%
+     \usebibmacro{byeditor+othersstrg}%
+     \clearname{editor}%
+     \newunit}%
+  \usebibmacro{byeditorx}%
+  \usebibmacro{bytranslator+others}}
+
+\DefineBibliographyStrings{english}{byeditor = {(editor)},}
+
+\renewcommand{\emph}[1]{\textnormal{\textit{#1}}}
+\renewcommand*{\mkbibnamefamily}[1]{\textnormal{\textsc{#1}}}%
+\renewcommand{\newunitpunct}{\addspace\midsentence}
+\DeclareDelimFormat[bib]{nametitledelim}{\addcolon\space} %Doppelpunkt nach Namen, kein Punkt
+\DeclareFieldFormat[article,inbook,incollection,inproceedings,patent,thesis,unpublished]{title}{\textnormal{#1}\addcomma} % keine Anführungszeichen um Titel und kursiv
+\DeclareFieldFormat{journaltitle}{\mkbibemph{#1}} % italic journal title, no comma
+\DeclareFieldFormat[inbook,thesis]{title}{\mkbibemph{#1\addcomma}} % italic title with comma
+\DeclareFieldFormat[article]{title}{#1\addcomma} % title of journal article is printed as normal text
+\DeclareFieldFormat{titlecase}{#1} % keine übermäßig vielen Großbuchstaben im Titel
+\DeclareFieldFormat[article]{volume}{\mkbibbold{#1}} % Volume in bold
+\DeclareFieldFormat[article]{number}{#1}             % issue textnormal
+\renewbibmacro*{volume+number+eid}{%
+   \printfield{volume}%
+   \setunit{\addcolon}%
+   \printfield{number}%
+  }
+\DeclareFieldFormat{pages}{#1} % kein pp. vor Seitenzahl
+\DeclareSourcemap{
+   \maps[datatype=bibtex]{
+     \map{
+       \step[fieldset=pagetotal, null]
+      }
+    }
+  }
+\renewbibmacro{in:}{%
+  \ifentrytype{article}{}{\printtext{In\intitlepunct}}
+  }
+
+% label in descriptions bold
+\frenchspacing
+
+\hyphenation{ATP-ase GTP-ase dia-be-tes phy-sio-logi-cal bio-lo-gy
+pro-teo-ly-sis trans-cy-to-sis hy-dro-ly-sis telo-mere hy-dro-lysed
+im-mu-no-glo-bu-lin Cali-for-nia mini-mum mini-ma phos-pha-ti-dyl pyro-phos-phate}
+
+\makeatletter % \procideenvironment in analogy to \providecommand, https://tex.stackexchange.com/questions/20687/does-newenvironment-have-a-provideenvironment-cousin-as-newcommand-has-prov
+\def\provideenvironment{\@star@or@long\provide@environment}
+\def\provide@environment#1{%
+        \@ifundefined{#1}%
+                {\def\reserved@a{\newenvironment{#1}}}%
+                {\def\reserved@a{\renewenvironment{dummy@environ}}}%
+        \reserved@a
+}
+\def\dummy@environ{}
+\makeatother
+
+% Abstracts in book + scrbook
+\providecommand\abstractname{Abstract}% doesn't change pre-existing command
+\provideenvironment{abstract}[1]{%
+  \begin{center}\normalfont\bfseries\abstractname\end{center}
+  \begin{quotation} #1 \end{quotation}
+  }{%
+  \vspace{1cm}
+  }
+
+
+% Extend acronym package with first letter caps: https://tex.stackexchange.com/questions/80003/capitalising-the-first-letter-of-an-acronym/150798#150798
+\makeatletter
+  \newif\ifAC@uppercase@first%
+  \def\Aclp#1{\AC@uppercase@firsttrue\aclp{#1}\AC@uppercase@firstfalse}%
+  \def\AC@aclp#1{%
+    \ifcsname fn@#1@PL\endcsname%
+      \ifAC@uppercase@first%
+        \expandafter\expandafter\expandafter\MakeUppercase\csname fn@#1@PL\endcsname%
+      \else%
+        \csname fn@#1@PL\endcsname%
+      \fi%
+    \else%
+      \AC@acl{#1}s%
+    \fi%
+  }%
+  \def\Acp#1{\AC@uppercase@firsttrue\acp{#1}\AC@uppercase@firstfalse}%
+  \def\AC@acp#1{%
+    \ifcsname fn@#1@PL\endcsname%
+      \ifAC@uppercase@first%
+        \expandafter\expandafter\expandafter\MakeUppercase\csname fn@#1@PL\endcsname%
+      \else%
+        \csname fn@#1@PL\endcsname%
+      \fi%
+    \else%
+      \AC@ac{#1}s%
+    \fi%
+  }%
+  \def\Acfp#1{\AC@uppercase@firsttrue\acfp{#1}\AC@uppercase@firstfalse}%
+  \def\AC@acfp#1{%
+    \ifcsname fn@#1@PL\endcsname%
+      \ifAC@uppercase@first%
+        \expandafter\expandafter\expandafter\MakeUppercase\csname fn@#1@PL\endcsname%
+      \else%
+        \csname fn@#1@PL\endcsname%
+      \fi%
+    \else%
+      \AC@acf{#1}s%
+    \fi%
+  }%
+  \def\Acsp#1{\AC@uppercase@firsttrue\acsp{#1}\AC@uppercase@firstfalse}%
+  \def\AC@acsp#1{%
+    \ifcsname fn@#1@PL\endcsname%
+      \ifAC@uppercase@first%
+        \expandafter\expandafter\expandafter\MakeUppercase\csname fn@#1@PL\endcsname%
+      \else%
+        \csname fn@#1@PL\endcsname%
+      \fi%
+    \else%
+      \AC@acs{#1}s%
+    \fi%
+  }%
+  \edef\AC@uppercase@write{\string\ifAC@uppercase@first\string\expandafter\string\MakeUppercase\string\fi\space}%
+  \def\AC@acrodef#1[#2]#3{%
+    \@bsphack%
+    \protected@write\@auxout{}{%
+      \string\newacro{#1}[#2]{\AC@uppercase@write #3}%
+    }\@esphack%
+  }%
+  \def\Acl#1{\AC@uppercase@firsttrue\acl{#1}\AC@uppercase@firstfalse}
+  \def\Acf#1{\AC@uppercase@firsttrue\acf{#1}\AC@uppercase@firstfalse}
+  \def\Ac#1{\AC@uppercase@firsttrue\ac{#1}\AC@uppercase@firstfalse}
+  \def\Acs#1{\AC@uppercase@firsttrue\acs{#1}\AC@uppercase@firstfalse}
+  \robustify\Aclp
+  \robustify\Acfp
+  \robustify\Acp
+  \robustify\Acsp
+  \robustify\Acl
+  \robustify\Acf
+  \robustify\Ac
+  \robustify\Acs
+  \def\AC@@acro#1[#2]#3{%
+    \ifAC@nolist%
+    \else%
+    \ifAC@printonlyused%
+      \expandafter\ifx\csname acused@#1\endcsname\AC@used%
+         \item[\protect\AC@hypertarget{#1}{\acsfont{#2}}] #3%
+            \ifAC@withpage%
+              \expandafter\ifx\csname r@acro:#1\endcsname\relax%
+                 \PackageInfo{acronym}{%
+                   Acronym #1 used in text but not spelled out in
+                   full in text}%
+              \else%
+                 \dotfill\pageref{acro:#1}%
+              \fi\\%
+            \fi%
+      \fi%
+   \else%
+      \item[\protect\AC@hypertarget{#1}{\acsfont{#2}}] #3%
+   \fi%
+   \fi%
+   \begingroup
+      \def\acroextra##1{}%
+      \@bsphack
+      \protected@write\@auxout{}%
+         {\string\newacro{#1}[\string\AC@hyperlink{#1}{#2}]{\AC@uppercase@write #3}}%
+      \@esphack
+    \endgroup}
+\makeatother
